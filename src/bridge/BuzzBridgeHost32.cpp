@@ -28,6 +28,7 @@ static std::string g_sessionId;
 static bool g_running = true;
 static int g_numTracks = 1;
 static bool g_firstTick = true;
+static int g_workCrashCount = 0;
 static HANDLE g_hWorkReady = nullptr;  // Event: client signals "work ready"
 static HANDLE g_hWorkDone = nullptr;   // Event: host signals "work done"
 
@@ -102,6 +103,7 @@ static void HandleInitMachine() {
 		auto* machine = g_loader.GetMachine();
 		g_numTracks = (info && info->minTracks > 0) ? info->minTracks : 1;
 		g_firstTick = true;
+		g_workCrashCount = 0;
 		{
 			char dbg[256];
 			snprintf(dbg, sizeof(dbg),
@@ -307,6 +309,7 @@ do_tick:
 
 	// Call Tick
 	bool ok = SEH_Call([&]() { machine->Tick(); });
+	if (!ok) g_workCrashCount++;
 	g_firstTick = false;
 	g_pipe.SendResponse(ok ? kRespOk : kRespError);
 }
@@ -316,6 +319,7 @@ static void DoWork(int numSamples, int workMode) {
 	auto* machine = g_loader.GetMachine();
 	auto* info = g_loader.GetInfo();
 	if (!machine || !info || g_loader.IsFaulted()) return;
+	if (g_workCrashCount > 3) return; // stop calling after repeated crashes
 
 	auto* audio = g_sharedMem.GetAudio();
 	if (!audio) return;
@@ -341,9 +345,10 @@ static void DoWork(int numSamples, int workMode) {
 			}
 			memset(outBuf, 0, blockSize * sizeof(float));
 			bool blockOut = false;
-			SEH_Call([&]() {
+			bool ok = SEH_Call([&]() {
 				blockOut = machine->WorkMonoToStereo(inBuf, outBuf, blockSize, workMode);
 			});
+			if (!ok) { g_workCrashCount++; return; }
 			if (blockOut) {
 				memcpy(audio->outputLeft + offset, inBuf, blockSize * sizeof(float));
 				memcpy(audio->outputRight + offset, outBuf, blockSize * sizeof(float));
@@ -360,10 +365,10 @@ static void DoWork(int numSamples, int workMode) {
 				memset(workBuf, 0, blockSize * sizeof(float));
 			}
 			bool blockOut = false;
-			SEH_Call([&]() {
+			bool ok = SEH_Call([&]() {
 				blockOut = machine->Work(workBuf, blockSize, workMode);
 			});
-			if (workBuf[0] == 12345.0f) workBuf[0] = 0; // restore canary
+			if (!ok) { g_workCrashCount++; return; }
 			if (blockOut) {
 				memcpy(audio->outputLeft + offset, workBuf, blockSize * sizeof(float));
 				memcpy(audio->outputRight + offset, workBuf, blockSize * sizeof(float));

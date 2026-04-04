@@ -80,11 +80,28 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 	}
 
 	// The bridge host handles mono-to-stereo based on machine flags internally
-	if (bridge.Work(numSamples, workMode) && audio->hasOutput) {
+	bool workOk = bridge.Work(numSamples, workMode);
+	{
+		static int effectLog = 0;
+		if (effectLog < 5) {
+			char dbg[128];
+			snprintf(dbg, sizeof(dbg), "[BuzzBridge] Effect Work: ok=%d hasOutput=%d mode=%d samples=%d\n",
+				(int)workOk, audio->hasOutput, workMode, numSamples);
+			OutputDebugStringA(dbg);
+			effectLog++;
+		}
+	}
+	if (workOk && audio->hasOutput) {
 		for (int32 i = 0; i < numSamples; i++) {
 			outputs[0][i] = audio->outputLeft[i] * kBuzzToVst3Scale;
 			if (numOutputChannels >= 2)
 				outputs[1][i] = audio->outputRight[i] * kBuzzToVst3Scale;
+		}
+	} else if (hasInput) {
+		// Effect produced no output — pass input through (transparent)
+		for (int32 ch = 0; ch < std::min(numInputChannels, numOutputChannels); ch++) {
+			if (inputs[ch] && outputs[ch])
+				memcpy(outputs[ch], inputs[ch], numSamples * sizeof(float));
 		}
 	} else {
 		for (int32 ch = 0; ch < numOutputChannels; ch++)
@@ -119,6 +136,12 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 				outputs[0][i] = BuzzSampleToVst3(workBufLeft[i]);
 				if (numOutputChannels >= 2)
 					outputs[1][i] = BuzzSampleToVst3(workBufRight[i]);
+			}
+		} else if (hasInput) {
+			// Pass input through when effect produces no output
+			for (int32 ch = 0; ch < std::min(numInputChannels, numOutputChannels); ch++) {
+				if (inputs[ch] && outputs[ch])
+					memcpy(outputs[ch], inputs[ch], numSamples * sizeof(float));
 			}
 		} else {
 			for (int32 ch = 0; ch < numOutputChannels; ch++)
@@ -165,6 +188,11 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 				float sample = BuzzSampleToVst3(workBufLeft[i]);
 				for (int32 ch = 0; ch < numOutputChannels; ch++)
 					if (outputs[ch]) outputs[ch][i] = sample;
+			}
+		} else if (hasInput) {
+			for (int32 ch = 0; ch < std::min(numInputChannels, numOutputChannels); ch++) {
+				if (inputs[ch] && outputs[ch])
+					memcpy(outputs[ch], inputs[ch], numSamples * sizeof(float));
 			}
 		} else {
 			for (int32 ch = 0; ch < numOutputChannels; ch++)
