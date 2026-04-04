@@ -113,6 +113,33 @@ tresult PLUGIN_API BuzzPluginView::attached(void* parent, FIDString type)
 		return kResultFalse;
 
 	hwndParent = (HWND)parent;
+
+	// Auto-detect DPI if the host hasn't called setContentScaleFactor.
+	// Many hosts (VCV Rack, Renoise) don't call it, leaving scaleFactor=1.0
+	// even on HiDPI displays.
+	bool dpiChanged = false;
+	if (scaleFactor == 1.0f) {
+		HDC hdc = GetDC(hwndParent);
+		if (hdc) {
+			int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+			ReleaseDC(hwndParent, hdc);
+			float detected = (float)dpiX / 96.0f;
+			if (detected > 1.0f) {
+				scaleFactor = detected;
+				dpiChanged = true;
+			}
+		}
+	}
+
+	// If DPI was detected, update our rect and ask the host to resize
+	if (dpiChanged) {
+		ViewRect r(0, 0, S(kBaseWidth), S(kBaseHeight));
+		setRect(r);
+		if (plugFrame) {
+			plugFrame->resizeView(this, &r);
+		}
+	}
+
 	createControls(hwndParent);
 	return CPluginView::attached(parent, type);
 }
