@@ -4,6 +4,7 @@
 #include "MachineInterface.h"
 #include "BuzzOscTables.h"
 #include "BuzzWaveTable.h"
+#include "BuzzMDKHelper.h"
 
 namespace BuzzVst {
 
@@ -172,6 +173,9 @@ public:
 
 	// Wave table - provides sample data to machines
 	BuzzWaveTable* waveTable = nullptr;
+
+	// MDK stub - returned by GetNearestWaveLevel(-1, -1) for MDK-based machines
+	void* mdkStub = nullptr;
 
 private:
 	CRITICAL_SECTION cs;

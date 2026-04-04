@@ -38,6 +38,11 @@ struct BridgeSharedAudio {
 
 	// Whether Work() returned true (has audio output)
 	int32_t hasOutput;
+
+	// Fast-path Work signaling: client writes numSamples+workMode, signals workReady.
+	// Host processes, writes hasOutput, signals workDone. No pipe needed.
+	volatile int32_t fastWorkReady;   // 1 = client has written work params
+	volatile int32_t fastWorkDone;    // 1 = host has finished processing
 };
 #pragma pack(pop)
 

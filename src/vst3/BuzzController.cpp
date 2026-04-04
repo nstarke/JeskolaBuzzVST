@@ -192,6 +192,23 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 			// Update the view immediately for responsiveness
 			view->setTrackInfo(newCount, view->minTracks, view->maxTracks);
 
+			// Update active track param count and reveal/hide params for the new track count
+			activeTrackParams = activeTrackParams; // unchanged per-track count
+			for (int t = 0; t < kMaxTracks; t++) {
+				for (int i = 0; i < activeTrackParams; i++) {
+					ParamID paramId = kBuzzTrackParamBase + t * kTrackParamStride + i;
+					Parameter* param = parameters.getParameter(paramId);
+					if (!param) continue;
+					ParameterInfo& info = param->getInfo();
+					info.flags = (t < newCount)
+						? ParameterInfo::kCanAutomate
+						: (ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly);
+				}
+			}
+
+			// Refresh the parameter sliders in the GUI
+			pushParamInfoToView();
+
 			// Tell host params changed (new track params revealed/hidden)
 			if (componentHandler) {
 				componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
@@ -363,6 +380,15 @@ void BuzzController::onDllPathSelected(const std::string& path)
 
 	// Always send to processor
 	sendDllPathToProcessor(path);
+
+	// Start a timer to poll for load completion (processor can't sendMessage back
+	// from the audio thread without deadlocking). Timer fires on UI thread.
+	if (activeView) {
+		HWND hwnd = activeView->getContainerHWND();
+		if (hwnd && IsWindow(hwnd)) {
+			SetTimer(hwnd, 42 /*timer ID*/, 200 /*ms*/, nullptr);
+		}
+	}
 
 	if (paramsLoaded && componentHandler) {
 		componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
@@ -652,22 +678,16 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 				}
 			}
 
-			// Push param info to view (covers both direct-load and message-based paths)
-			pushParamInfoToView();
-
-			if (componentHandler) {
-				OutputDebugStringA("[BuzzBridge] Controller: calling restartComponent\n");
-				tresult rr = componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
-				char dbg[128];
-				snprintf(dbg, sizeof(dbg), "[BuzzBridge] Controller: restartComponent returned %d\n", (int)rr);
-				OutputDebugStringA(dbg);
-				if (rr != kResultOk) {
-					pendingParamRestart = true;
+			// Defer ALL UI updates to the UI thread via PostMessage.
+			// notify() can be called from the audio thread — any direct Win32
+			// or host API calls from here can deadlock.
+			if (activeView) {
+				HWND hwnd = activeView->getContainerHWND();
+				if (hwnd && IsWindow(hwnd)) {
+					PostMessage(hwnd, BuzzPluginView::WM_DEFERRED_PARAM_UPDATE, 0, 0);
 				}
-			} else {
-				OutputDebugStringA("[BuzzBridge] Controller: componentHandler is NULL, cannot restart\n");
-				pendingParamRestart = true;
 			}
+			pendingParamRestart = true;
 		}
 		return kResultOk;
 	}
@@ -949,24 +969,26 @@ void BuzzController::pushParamInfoToView()
 		infos.push_back(pvi);
 	}
 
-	// Track 0 params
-	for (int i = 0; i < activeTrackParams; i++) {
-		ParamID paramId = kBuzzTrackParamBase + i;
-		Parameter* param = parameters.getParameter(paramId);
-		if (!param) continue;
+	// Track params for all active tracks
+	for (int t = 0; t < kMaxTracks; t++) {
+		for (int i = 0; i < activeTrackParams; i++) {
+			ParamID paramId = kBuzzTrackParamBase + t * kTrackParamStride + i;
+			Parameter* param = parameters.getParameter(paramId);
+			if (!param) continue;
 
-		ParameterInfo& pinfo = param->getInfo();
-		if (pinfo.flags & ParameterInfo::kIsHidden) continue;
+			ParameterInfo& pinfo = param->getInfo();
+			if (pinfo.flags & ParameterInfo::kIsHidden) continue;
 
-		ParamViewInfo pvi;
-		pvi.paramId = paramId;
+			ParamViewInfo pvi;
+			pvi.paramId = paramId;
 
-		char nameBuf[256] = {};
-		Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
-		pvi.name = nameBuf;
-		pvi.stepCount = pinfo.stepCount;
-		pvi.normalizedValue = param->getNormalized();
-		infos.push_back(pvi);
+			char nameBuf[256] = {};
+			Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
+			pvi.name = nameBuf;
+			pvi.stepCount = pinfo.stepCount;
+			pvi.normalizedValue = param->getNormalized();
+			infos.push_back(pvi);
+		}
 	}
 
 	activeView->setParamInfo(infos);
@@ -983,6 +1005,28 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 	};
 	view->onParamEndEdit = [this](ParamID id) {
 		endEdit(id);
+	};
+	view->onDeferredParamUpdate = [this]() {
+		OutputDebugStringA("[BuzzBridge] Controller: deferred param update on UI thread\n");
+		if (activeView) {
+			activeView->setMachineName(currentMachineName);
+			activeView->setDllPath(currentDllPath);
+		}
+		pushParamInfoToView();
+		if (componentHandler) {
+			componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
+		}
+		pendingParamRestart = false;
+	};
+	view->onPollMachineLoad = [this]() -> bool {
+		// Ask processor if it has a pending machine loaded
+		if (auto msg = owned(allocateMessage())) {
+			msg->setMessageID("BuzzPollMachineStatus");
+			sendMessage(msg);
+		}
+		// The processor will reply with BuzzMachineLoaded if ready
+		// Return true to stop timer if we got an update
+		return !pendingParamRestart;
 	};
 }
 

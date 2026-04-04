@@ -94,6 +94,13 @@ protected:
 	std::string dllPath;
 	bool machineReady = false;
 
+	// Deferred machine load: notify() sets the path, process() does the actual load.
+	// This avoids race conditions between the UI thread (notify) and audio thread (process).
+	std::string pendingDllPath;
+	bool hasPendingLoad = false;
+	bool pendingMachineLoaded = false;  // set after successful deferred load
+	bool pendingLoadFailed = false;     // set after failed deferred load
+
 	// Machine info (populated from loader in 32-bit, or bridge in 64-bit)
 	int machineType = 0;
 	int machineFlags = 0;
@@ -116,6 +123,11 @@ protected:
 	// Deferred note-off: if a note-off arrives before a pending note-on is ticked,
 	// defer it so the machine sees the note-on first.
 	bool pendingNoteOff = false;
+
+	// Cached master info to avoid sending SetMasterInfo on every process() call
+	int lastSentBpm = 0;
+	int lastSentSampleRate = 0;
+	int lastSentTpb = 0;
 
 	// Tick timing
 	int samplesUntilNextTick = 0;

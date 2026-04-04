@@ -89,7 +89,7 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 	hDll = LoadLibraryA(dllPath);
 	if (!hDll) {
 		char dbg[512];
-		snprintf(dbg, sizeof(dbg), "[BuzzVst] LoadLibraryA failed (error %lu): %s\n",
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] LoadLibraryA failed (error %lu): %s\n",
 			GetLastError(), dllPath);
 		OutputDebugStringA(dbg);
 		return false;
@@ -100,7 +100,7 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 	fnCreateMachine = (CreateMachineFunc)GetProcAddress(hDll, "CreateMachine");
 
 	if (!fnGetInfo || !fnCreateMachine) {
-		OutputDebugStringA("[BuzzVst] DLL missing GetInfo or CreateMachine exports\n");
+		OutputDebugStringA("[BuzzBridgeHost32] DLL missing GetInfo or CreateMachine exports\n");
 		FreeLibrary(hDll);
 		hDll = nullptr;
 		return false;
@@ -113,7 +113,7 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 	});
 
 	if (!ok || !ValidateInfo(pInfo)) {
-		OutputDebugStringA("[BuzzVst] GetInfo() failed or returned invalid info\n");
+		OutputDebugStringA("[BuzzBridgeHost32] GetInfo() failed or returned invalid info\n");
 		pInfo = nullptr;
 		FreeLibrary(hDll);
 		hDll = nullptr;
@@ -132,8 +132,13 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 
 bool BuzzMachineLoader::InitMachine()
 {
-	if (!hDll || !fnCreateMachine || !pInfo)
+	OutputDebugStringA("[BuzzBridgeHost32] *** InitMachine ENTERED ***\n");
+	if (!hDll || !fnCreateMachine || !pInfo) {
+		OutputDebugStringA("[BuzzBridgeHost32] InitMachine: missing hDll/fnCreateMachine/pInfo\n");
 		return false;
+	}
+
+	OutputDebugStringA("[BuzzBridgeHost32] InitMachine: calling CreateMachine...\n");
 
 	// Create the machine instance
 	pMachine = nullptr;
@@ -142,9 +147,16 @@ bool BuzzMachineLoader::InitMachine()
 	});
 
 	if (!ok || !pMachine) {
-		OutputDebugStringA("[BuzzVst] CreateMachine() failed\n");
+		OutputDebugStringA("[BuzzBridgeHost32] CreateMachine() failed\n");
 		faulted = true;
 		return false;
+	}
+
+	{
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] CreateMachine OK: pMachine=%p GlobalVals=%p TrackVals=%p\n",
+			pMachine, pMachine->GlobalVals, pMachine->TrackVals);
+		OutputDebugStringA(dbg);
 	}
 
 	// Set up the machine's host pointers
@@ -160,33 +172,46 @@ bool BuzzMachineLoader::InitMachine()
 		pMachine->AttrVals = attrVals.data();
 	}
 
+	OutputDebugStringA("[BuzzBridgeHost32] InitMachine: calling Init...\n");
+
 	// Initialize the machine with SEH protection
 	ok = SEH_Call([&]() {
 		pMachine->Init(nullptr);
 	});
 
 	if (!ok) {
-		OutputDebugStringA("[BuzzVst] Init() crashed\n");
+		OutputDebugStringA("[BuzzBridgeHost32] Init() crashed\n");
 		faulted = true;
-		// Don't delete pMachine - it may have corrupted its state
 		pMachine = nullptr;
 		return false;
 	}
 
+	OutputDebugStringA("[BuzzBridgeHost32] Init() OK\n");
+
 	// Notify machine about attributes (must be after Init)
 	if (pInfo->numAttributes > 0) {
-		SEH_Call([&]() {
+		OutputDebugStringA("[BuzzBridgeHost32] Calling AttributesChanged...\n");
+		ok = SEH_Call([&]() {
 			pMachine->AttributesChanged();
 		});
+		if (!ok) OutputDebugStringA("[BuzzBridgeHost32] AttributesChanged crashed\n");
 	}
 
 	// Set number of tracks to minimum (for machines with track parameters)
 	if (pInfo->numTrackParameters > 0 && pInfo->minTracks > 0) {
-		SEH_Call([&]() {
+		char dbg[128];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Calling SetNumTracks(%d)...\n", pInfo->minTracks);
+		OutputDebugStringA(dbg);
+		ok = SEH_Call([&]() {
 			pMachine->SetNumTracks(pInfo->minTracks);
 		});
+		if (!ok) {
+			OutputDebugStringA("[BuzzBridgeHost32] SetNumTracks crashed - marking faulted\n");
+			faulted = true;
+		}
 	}
 
+	OutputDebugStringA("[BuzzBridgeHost32] InitMachine: returning true\n");
 	return true;
 }
 

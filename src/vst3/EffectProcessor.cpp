@@ -2,7 +2,6 @@
 #include "plugids.h"
 #include <cstring>
 #include <algorithm>
-#include <cmath>
 
 namespace BuzzVst {
 
@@ -53,13 +52,9 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 		return;
 	}
 
-	// Determine work mode
-	bool hasInput = false;
-	if (inputs && numInputChannels > 0 && inputs[0]) {
-		for (int32 i = 0; i < numSamples; i++) {
-			if (fabsf(inputs[0][i]) > 1e-10f) { hasInput = true; break; }
-		}
-	}
+	// Effects always use WM_READWRITE: input is in the buffer (READ) and
+	// the machine writes processed output back (WRITE).
+	bool hasInput = (inputs && numInputChannels > 0 && inputs[0]);
 	int workMode = hasInput ? WM_READWRITE : WM_NOIO;
 
 #ifdef BUZZVST_64BIT
@@ -71,7 +66,7 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 	}
 
 	// Copy input to shared memory (scaled to Buzz range)
-	if (inputs && inputs[0]) {
+	if (hasInput) {
 		for (int32 i = 0; i < numSamples; i++)
 			audio->inputLeft[i] = inputs[0][i] * kVst3ToBuzzScale;
 	} else {
@@ -84,6 +79,7 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 		memcpy(audio->inputRight, audio->inputLeft, numSamples * sizeof(float));
 	}
 
+	// The bridge host handles mono-to-stereo based on machine flags internally
 	if (bridge.Work(numSamples, workMode) && audio->hasOutput) {
 		for (int32 i = 0; i < numSamples; i++) {
 			outputs[0][i] = audio->outputLeft[i] * kBuzzToVst3Scale;
