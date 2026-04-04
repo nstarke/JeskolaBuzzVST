@@ -116,7 +116,9 @@ private:
 	HWND hwndRemoveTrackButton = nullptr;
 	HWND hwndTrackLabel = nullptr;
 	HWND hwndGearLabel = nullptr;
+	HWND hwndFilterEdit = nullptr;
 	HWND hwndMachineList = nullptr;
+	std::string machineFilter; // current filter text for machine list
 	HWND hwndParamPanel = nullptr;
 	HWND hwndParamLabel = nullptr;
 
@@ -152,6 +154,7 @@ private:
 	static const int kWaveListID = 1005;
 	static const int kAddTrackButtonID = 1006;
 	static const int kRemoveTrackButtonID = 1007;
+	static const int kFilterEditID = 1008;
 	static const int kParamSliderBaseID = 2000;
 	static const int kParamLabelBaseID = 3000;
 

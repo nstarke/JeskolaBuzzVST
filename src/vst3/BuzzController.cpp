@@ -223,7 +223,10 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 
 		activeView = view;
 
-		// Push current param info to the view
+		// Push current machine state to the view
+		if (machineMaxTracks > 0) {
+			view->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
+		}
 		pushParamInfoToView();
 
 		return view;
@@ -671,10 +674,15 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 					OutputDebugStringA("[BuzzBridge] Controller: configured params from processor message\n");
 				}
 
+				// Store track counts for later use (createView, deferred update)
+				currentNumTracks = std::max(1, (int)minT);
+				machineMinTracks = (int)minT;
+				machineMaxTracks = (int)maxT;
+
 				if (activeView) {
 					activeView->setMachineName(currentMachineName);
 					activeView->setDllPath(currentDllPath);
-					activeView->setTrackInfo(std::max(1, (int)minT), (int)minT, (int)maxT);
+					activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 				}
 			}
 
@@ -912,11 +920,16 @@ bool BuzzController::loadMachineParameters(const std::string& path)
 		}
 	}
 
+	// Store track info
+	currentNumTracks = initTracks;
+	machineMinTracks = pInfo->minTracks;
+	machineMaxTracks = pInfo->maxTracks;
+
 	// Update the GUI if open
 	if (activeView) {
 		activeView->setMachineName(currentMachineName);
 		activeView->setDllPath(currentDllPath);
-		activeView->setTrackInfo(initTracks, pInfo->minTracks, pInfo->maxTracks);
+		activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 	}
 
 	return true;
@@ -953,6 +966,13 @@ tresult PLUGIN_API BuzzController::queryInterface(const char* iid, void** obj)
 void BuzzController::pushParamInfoToView()
 {
 	if (!activeView) return;
+
+	{
+		char dbg[128];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] pushParamInfoToView: globalParams=%d trackParams=%d\n",
+			activeGlobalParams, activeTrackParams);
+		OutputDebugStringA(dbg);
+	}
 
 	std::vector<ParamViewInfo> infos;
 
@@ -1018,6 +1038,7 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 		if (activeView) {
 			activeView->setMachineName(currentMachineName);
 			activeView->setDllPath(currentDllPath);
+			activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 		}
 		pushParamInfoToView();
 		if (componentHandler) {

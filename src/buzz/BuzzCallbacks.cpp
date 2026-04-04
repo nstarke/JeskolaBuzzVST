@@ -67,7 +67,8 @@ CWaveLevel const *BuzzCallbacks::GetNearestWaveLevel(int const i, int const note
 	// a helper object they use for Init and Work delegation.
 	if (i == -1 && note == -1) {
 		if (!mdkStub) mdkStub = CreateMDKStub();
-		OutputDebugStringA("[BuzzBridgeHost32] GetNearestWaveLevel(-1,-1): returning MDK stub\n");
+		isMDKMachine = true;
+		OutputDebugStringA("[BuzzBridgeHost32] GetNearestWaveLevel(-1,-1): returning MDK stub (MDK machine detected)\n");
 		return (CWaveLevel const*)mdkStub;
 	}
 	// Special check: GetNearestWaveLevel(-2, -2) is used to detect host version support

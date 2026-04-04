@@ -163,6 +163,7 @@ if(NOT BUZZVST_64BIT)
         tests/test_MultiTrack.cpp
         tests/test_ParamSliders.cpp
         tests/test_Validation.cpp
+        tests/test_Comprehensive.cpp
     )
 
     add_executable(BuzzBridgeTests

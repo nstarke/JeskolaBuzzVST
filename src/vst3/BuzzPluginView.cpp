@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <commctrl.h>
 #include <commdlg.h>
 #include <shlobj.h>
@@ -166,6 +167,7 @@ tresult PLUGIN_API BuzzPluginView::removed()
 		hwndRemoveTrackButton = nullptr;
 		hwndTrackLabel = nullptr;
 		hwndGearLabel = nullptr;
+		hwndFilterEdit = nullptr;
 		hwndMachineList = nullptr;
 		hwndParamPanel = nullptr;
 		hwndParamLabel = nullptr;
@@ -379,6 +381,15 @@ void BuzzPluginView::createControls(HWND parent)
 	SendMessage(hwndGearLabel, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
 	y += S(18);
 
+	// Machine filter text input
+	hwndFilterEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+		WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+		innerMargin, y, w - 2 * innerMargin, S(22),
+		hwndContainer, (HMENU)(INT_PTR)kFilterEditID, hInst, nullptr);
+	SendMessage(hwndFilterEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+	SendMessageA(hwndFilterEdit, EM_SETCUEBANNER, TRUE, (LPARAM)L"Filter machines...");
+	y += S(24);
+
 	// Machine listbox
 	hwndMachineList = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
@@ -421,6 +432,13 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 					self->onLoadSamplesClicked();
 					return 0;
 				}
+				if (id == kFilterEditID && code == EN_CHANGE) {
+					char buf[256] = {};
+					GetWindowTextA(self->hwndFilterEdit, buf, sizeof(buf));
+					self->machineFilter = buf;
+					self->populateMachineList();
+					return 0;
+				}
 				if (id == kMachineListID && code == LBN_DBLCLK) {
 					self->onMachineListDoubleClick();
 					return 0;
@@ -437,6 +455,21 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 				if (id == kRemoveTrackButtonID && code == BN_CLICKED) {
 					if (self->onTrackCountChanged && self->currentTracks > self->minTracks)
 						self->onTrackCountChanged(-1);
+					return 0;
+				}
+			}
+			break;
+
+		case WM_MOUSEWHEEL:
+			// Forward mouse wheel to the param panel for scrolling
+			if (self && self->hwndParamPanel) {
+				POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+				ScreenToClient(hWnd, &pt);
+				RECT panelRect;
+				GetWindowRect(self->hwndParamPanel, &panelRect);
+				MapWindowPoints(HWND_DESKTOP, hWnd, (POINT*)&panelRect, 2);
+				if (PtInRect(&panelRect, pt)) {
+					SendMessage(self->hwndParamPanel, WM_MOUSEWHEEL, wParam, lParam);
 					return 0;
 				}
 			}
@@ -754,6 +787,10 @@ void BuzzPluginView::populateMachineList()
 	int filterType = isGenerator ? MT_GENERATOR : MT_EFFECT;
 	int count = 0;
 
+	// Build lowercase filter for case-insensitive matching
+	std::string filterLower = machineFilter;
+	for (auto& c : filterLower) c = (char)tolower((unsigned char)c);
+
 	for (int i = 0; i < (int)gearEntries.size(); i++) {
 		const auto& entry = gearEntries[i];
 		if (entry.machineType != filterType) continue;
@@ -763,6 +800,13 @@ void BuzzPluginView::populateMachineList()
 			display = entry.category + "/" + entry.displayName;
 		else
 			display = entry.displayName;
+
+		// Apply text filter (case-insensitive)
+		if (!filterLower.empty()) {
+			std::string displayLower = display;
+			for (auto& c : displayLower) c = (char)tolower((unsigned char)c);
+			if (displayLower.find(filterLower) == std::string::npos) continue;
+		}
 
 		int idx = (int)SendMessageA(hwndMachineList, LB_ADDSTRING, 0, (LPARAM)display.c_str());
 		if (idx != LB_ERR) {
@@ -881,6 +925,30 @@ LRESULT CALLBACK BuzzPluginView::ParamPanelWndProc(HWND hWnd, UINT msg, WPARAM w
 					self->onParamChanged(pc.paramId, normalized);
 				if (self->onParamEndEdit)
 					self->onParamEndEdit(pc.paramId);
+			}
+			return 0;
+		}
+
+		case WM_MOUSEWHEEL: {
+			// Handle mouse wheel scrolling (no modal loop, doesn't block audio)
+			if (!self) break;
+			int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+			SCROLLINFO si = {};
+			si.cbSize = sizeof(si);
+			si.fMask = SIF_ALL;
+			GetScrollInfo(hWnd, SB_VERT, &si);
+
+			int oldPos = si.nPos;
+			si.nPos -= delta / 2; // scroll speed
+
+			si.fMask = SIF_POS;
+			SetScrollInfo(hWnd, SB_VERT, &si, TRUE);
+			GetScrollInfo(hWnd, SB_VERT, &si);
+
+			if (si.nPos != oldPos) {
+				ScrollWindowEx(hWnd, 0, oldPos - si.nPos, nullptr, nullptr, nullptr, nullptr,
+					SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+				self->paramScrollPos = si.nPos;
 			}
 			return 0;
 		}

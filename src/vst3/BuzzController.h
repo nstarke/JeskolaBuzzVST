@@ -67,6 +67,9 @@ protected:
 	std::vector<GearEntry> scannedMachines;
 	int activeGlobalParams = 0;
 	int activeTrackParams = 0;
+	int currentNumTracks = 1;
+	int machineMinTracks = 0;
+	int machineMaxTracks = 0;
 
 private:
 	HMODULE hInfoDll = nullptr;
