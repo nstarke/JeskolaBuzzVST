@@ -8,6 +8,7 @@
 
 #include <windows.h>
 #include <cfloat>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -143,8 +144,23 @@ static void HandleInitMachine() {
 }
 
 static void HandleUnload() {
-	g_loader.GetCallbacks()->isMDKMachine = false;
-	g_loader.GetCallbacks()->mdkStub = nullptr;
+	auto* cb = g_loader.GetCallbacks();
+	// Clear MDK state. The machine's destructor may try to call the MDK
+	// destructor at offset 0x18, but our stub's dtor is a no-op.
+	// We need to null out offset 0x18 on the machine BEFORE Unload destroys it,
+	// so the machine's destructor doesn't call our freed stub.
+	if (cb->isMDKMachine && cb->mdkStub) {
+		auto* machine = g_loader.GetMachine();
+		if (machine) {
+			int** m = (int**)machine;
+			m[6] = nullptr; // clear offset 0x18 so machine dtor doesn't use freed MDK
+		}
+	}
+	if (cb->mdkStub) {
+		DestroyMDKStub(cb->mdkStub);
+		cb->mdkStub = nullptr;
+	}
+	cb->isMDKMachine = false;
 	g_loader.Unload();
 	g_pipe.SendResponse(kRespOk);
 }
@@ -337,7 +353,47 @@ static void DoWork(int numSamples, int workMode) {
 		int blockSize = numSamples - offset;
 		if (blockSize > MAX_BUFFER_LENGTH) blockSize = MAX_BUFFER_LENGTH;
 
-		if (monoToStereo) {
+		if (g_loader.GetCallbacks()->isMDKMachine) {
+			// MDK machines expect stereo interleaved: [L0, R0, L1, R1, ...]
+			// Need 2x buffer size since each sample is a stereo pair (8 bytes)
+			float interleavedBuf[MAX_BUFFER_LENGTH * 2];
+			if (workMode & WM_READ) {
+				for (int i = 0; i < blockSize; i++) {
+					interleavedBuf[i * 2] = audio->inputLeft[offset + i];
+					interleavedBuf[i * 2 + 1] = audio->inputRight[offset + i];
+				}
+			} else {
+				memset(interleavedBuf, 0, blockSize * 2 * sizeof(float));
+			}
+			bool blockOut = false;
+			bool ok = SEH_Call([&]() {
+				blockOut = machine->Work(interleavedBuf, blockSize, workMode);
+			});
+			if (!ok) {
+				g_workCrashCount++;
+				static int mdkCrashLog = 0;
+				if (mdkCrashLog++ < 10) {
+					char dbg[256];
+					snprintf(dbg, sizeof(dbg),
+						"[BuzzBridgeHost32] MDK Work CRASH: count=%d blk=%d mode=%d pos30=%d pos34=%d\n",
+						g_workCrashCount, blockSize, workMode,
+						*(int*)((char*)machine + 0x30), *(int*)((char*)machine + 0x34));
+					OutputDebugStringA(dbg);
+				}
+				return;
+			}
+			if (blockOut) {
+				// De-interleave stereo output
+				for (int i = 0; i < blockSize; i++) {
+					audio->outputLeft[offset + i] = interleavedBuf[i * 2];
+					audio->outputRight[offset + i] = interleavedBuf[i * 2 + 1];
+				}
+				hasOutput = true;
+			} else {
+				memset(audio->outputLeft + offset, 0, blockSize * sizeof(float));
+				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
+			}
+		} else if (monoToStereo) {
 			float inBuf[MAX_BUFFER_LENGTH];
 			float outBuf[MAX_BUFFER_LENGTH];
 			if (workMode & WM_READ) {
@@ -684,6 +740,8 @@ int main(int argc, char* argv[])
 
 	// Standalone test mode: BuzzBridgeHost32.exe --test <dll_path>
 	if (argc >= 3 && strcmp(argv[1], "--test") == 0) {
+		setvbuf(stdout, NULL, _IONBF, 0);
+		setvbuf(stderr, NULL, _IONBF, 0);
 		printf("FPU: 0x%08X\n", _controlfp(0, 0));
 		printf("Testing: %s\n", argv[2]);
 
@@ -706,7 +764,7 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		printf("InitMachine OK\n");
-		printf("MachineInterfaceEx: %p\n", (void*)loader.GetMachineEx());
+		printf("isMDKMachine: %d\n", (int)loader.GetCallbacks()->isMDKMachine);
 		auto* m = loader.GetMachine();
 		auto* l = loader.GetParamLayout();
 
@@ -735,17 +793,65 @@ int main(int argc, char* argv[])
 		}
 		SEH_Call([&]() { m->Tick(); });
 
-		float buf[256] = {};
-		bool out = false;
-		SEH_Call([&]() { out = m->Work(buf, 256, WM_WRITE); });
+		bool isMDK = loader.GetCallbacks()->isMDKMachine;
+		printf("isMDKMachine=%d\n", (int)isMDK);
 
-		float mx = 0;
-		for (int i = 0; i < 256; i++) {
-			float a = buf[i] < 0 ? -buf[i] : buf[i];
-			if (a > mx) mx = a;
+		if (isMDK) {
+			// MDK machines expect stereo interleaved audio: [L0, R0, L1, R1, ...]
+			// Feed a test signal (sine wave) and call Work multiple times to fill
+			// the overlap-add window (typically 2048 samples).
+			const int blockSize = 256;
+			const int numBlocks = 16; // 16 * 256 = 4096 > 2048 window
+			float interleavedBuf[blockSize * 2];
+			float mx = 0;
+			bool out = false;
+
+			for (int blk = 0; blk < numBlocks; blk++) {
+				// Generate stereo test signal (sine at ~440Hz)
+				for (int i = 0; i < blockSize; i++) {
+					float t = (float)(blk * blockSize + i) / 44100.0f;
+					float sample = 0.5f * sinf(2.0f * 3.14159265f * 440.0f * t);
+					interleavedBuf[i * 2]     = sample; // left
+					interleavedBuf[i * 2 + 1] = sample; // right
+				}
+				bool blockOut = false;
+				bool workOk = SEH_Call([&]() { blockOut = m->Work(interleavedBuf, blockSize, WM_READWRITE); });
+				if (!workOk) {
+					printf("Work CRASHED on block %d\n", blk);
+					break;
+				}
+				if (blockOut) {
+					out = true;
+					for (int i = 0; i < blockSize * 2; i++) {
+						float a = interleavedBuf[i] < 0 ? -interleavedBuf[i] : interleavedBuf[i];
+						if (a > mx) mx = a;
+					}
+				}
+			}
+			printf("hasOutput=%d max=%f\n", (int)out, mx);
+			printf(mx > 0 ? "*** AUDIO OK ***\n" : "*** NO AUDIO ***\n");
+		} else {
+			float buf[256] = {};
+			bool out = false;
+			SEH_Call([&]() { out = m->Work(buf, 256, WM_WRITE); });
+
+			float mx = 0;
+			for (int i = 0; i < 256; i++) {
+				float a = buf[i] < 0 ? -buf[i] : buf[i];
+				if (a > mx) mx = a;
+			}
+			printf("hasOutput=%d max=%f buf[0]=%f\n", (int)out, mx, buf[0]);
+			printf(mx > 0 ? "*** AUDIO OK ***\n" : "*** NO AUDIO ***\n");
 		}
-		printf("hasOutput=%d max=%f buf[0]=%f\n", (int)out, mx, buf[0]);
-		printf(mx > 0 ? "*** AUDIO OK ***\n" : "*** NO AUDIO ***\n");
+
+		printf("Test complete, cleaning up...\n");
+		// Clean up MDK before machine destruction to avoid heap issues
+		auto* cb = loader.GetCallbacks();
+		if (cb->isMDKMachine && cb->mdkStub) {
+			int** machineSlots = (int**)m;
+			machineSlots[6] = nullptr; // clear offset 0x18 before machine dtor
+		}
+		printf("Unloading...\n");
 		return 0;
 	}
 

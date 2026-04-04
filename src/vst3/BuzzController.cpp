@@ -227,6 +227,9 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 		if (machineMaxTracks > 0) {
 			view->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 		}
+		if (currentSampleRate > 0) {
+			view->setSampleRateWarning(currentSampleRate);
+		}
 		pushParamInfoToView();
 
 		return view;
@@ -601,6 +604,10 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 				message->getAttributes()->getInt("MaxTracks", maxT);
 				message->getAttributes()->getInt("NumGlobal", numGlobal);
 				message->getAttributes()->getInt("NumTrackParams", numTP);
+
+				Steinberg::int64 sampleRate = 0;
+				message->getAttributes()->getInt("SampleRate", sampleRate);
+				currentSampleRate = (int)sampleRate;
 
 				// Decode parameter info blob and configure pre-allocated params
 				const void* paramData = nullptr;
@@ -1039,6 +1046,7 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 			activeView->setMachineName(currentMachineName);
 			activeView->setDllPath(currentDllPath);
 			activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
+			if (currentSampleRate > 0) activeView->setSampleRateWarning(currentSampleRate);
 		}
 		pushParamInfoToView();
 		if (componentHandler) {

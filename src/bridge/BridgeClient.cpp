@@ -123,17 +123,9 @@ bool BridgeClient::Start(const std::string& hostExePath)
 		return false;
 	}
 
-	// Create events for fast Work path (shared memory signaling, no pipe)
-	std::string workReadyName = "Local\\BuzzBridgeWorkReady_" + sessionId;
-	std::string workDoneName = "Local\\BuzzBridgeWorkDone_" + sessionId;
-	hWorkReady = OpenEventA(EVENT_ALL_ACCESS, FALSE, workReadyName.c_str());
-	hWorkDone = OpenEventA(EVENT_ALL_ACCESS, FALSE, workDoneName.c_str());
-	fastWorkEnabled = (hWorkReady != nullptr && hWorkDone != nullptr);
-	if (fastWorkEnabled) {
-		OutputDebugStringA("[BuzzBridge64] Fast Work path enabled (event signaling)\n");
-	} else {
-		OutputDebugStringA("[BuzzBridge64] Fast Work path unavailable, using pipe fallback\n");
-	}
+	// Note: fast work path (event signaling) was removed because it causes
+	// race conditions between Tick (pipe thread) and Work (event thread).
+	// All commands go through the pipe which serializes them on one thread.
 
 	// Verify connection with a ping
 	if (!Ping()) {
@@ -219,23 +211,7 @@ bool BridgeClient::Tick(const std::vector<BridgeTickParam>& params)
 
 bool BridgeClient::Work(int numSamples, int workMode)
 {
-	if (fastWorkEnabled) {
-		// Fast path: write params to shared memory, signal event, wait for completion
-		auto* audio = sharedMem.GetAudio();
-		if (!audio) return false;
-
-		audio->numSamples = numSamples;
-		audio->workMode = workMode;
-		audio->hasOutput = 0;
-
-		// Signal host to process, wait for completion
-		MemoryBarrier();
-		SetEvent(hWorkReady);
-		DWORD result = WaitForSingleObject(hWorkDone, 5000);
-		return (result == WAIT_OBJECT_0);
-	}
-
-	// Pipe fallback
+	// Always use pipe — fast work thread causes race conditions with Tick
 	BridgeWorkCmd wcmd = {};
 	wcmd.numSamples = numSamples;
 	wcmd.workMode = workMode;

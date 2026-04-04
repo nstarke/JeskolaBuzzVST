@@ -53,6 +53,7 @@ public:
 	void setGearEntries(const std::vector<GearEntry>& entries);
 	void setWaveSlots(const std::vector<std::string>& slotNames);
 	void setTrackInfo(int current, int min, int max);
+	void setSampleRateWarning(int sampleRate);
 	void showScanningIndicator();
 	void setParamInfo(const std::vector<ParamViewInfo>& params);
 	void updateParamValue(Steinberg::Vst::ParamID id, double normalizedValue);
@@ -115,6 +116,7 @@ private:
 	HWND hwndAddTrackButton = nullptr;
 	HWND hwndRemoveTrackButton = nullptr;
 	HWND hwndTrackLabel = nullptr;
+	HWND hwndSampleRateWarning = nullptr;
 	HWND hwndGearLabel = nullptr;
 	HWND hwndFilterEdit = nullptr;
 	HWND hwndMachineList = nullptr;
