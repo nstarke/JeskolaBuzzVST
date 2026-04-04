@@ -53,6 +53,7 @@ set(BUZZ_SOURCES
     src/buzz/BuzzOscTables.cpp
     src/buzz/BuzzParamLayout.cpp
     src/buzz/BuzzWaveTable.cpp
+    src/buzz/BuzzMDKHelper.cpp
 )
 
 # =============================================================================
@@ -172,6 +173,7 @@ if(NOT BUZZVST_64BIT)
         src/buzz/BuzzOscTables.cpp
         src/buzz/BuzzParamLayout.cpp
         src/buzz/BuzzWaveTable.cpp
+        src/buzz/BuzzMDKHelper.cpp
         src/vst3/ParameterMapping.cpp
         src/vst3/GearScanner.cpp
         src/vst3/BuzzPluginView.cpp

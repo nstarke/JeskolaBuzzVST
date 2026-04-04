@@ -21,7 +21,7 @@ inline bool SEH_Call(Func fn)
 		return true;
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER) {
-		OutputDebugStringA("[BuzzVst] SEH exception caught in machine code\n");
+		OutputDebugStringA("[BuzzBridgeHost32] SEH exception caught in machine code\n");
 		return false;
 	}
 }
@@ -35,7 +35,7 @@ inline T SEH_CallRet(Func fn, T defaultVal)
 		return fn();
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER) {
-		OutputDebugStringA("[BuzzVst] SEH exception caught in machine code\n");
+		OutputDebugStringA("[BuzzBridgeHost32] SEH exception caught in machine code\n");
 		return defaultVal;
 	}
 }
