@@ -31,6 +31,7 @@ static bool g_firstTick = true;
 
 // Read a null-terminated string from the pipe
 static bool ReadString(BridgePipe& pipe, uint32_t size, std::string& out) {
+	if (size > 65536) return false;
 	std::vector<char> buf(size + 1, 0);
 	if (!pipe.ReadAll(buf.data(), size)) return false;
 	buf[size] = 0;
@@ -519,9 +520,18 @@ static void HandleGetInfo() {
 	bmi.numTrackParams = (int32_t)tSlots.size();
 	bmi.minTracks = info->minTracks;
 	bmi.maxTracks = info->maxTracks;
-	if (info->Name) strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
-	if (info->ShortName) strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
-	if (info->Author) strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+	if (info->Name) {
+		strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
+		bmi.name[sizeof(bmi.name) - 1] = '\0';
+	}
+	if (info->ShortName) {
+		strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
+		bmi.shortName[sizeof(bmi.shortName) - 1] = '\0';
+	}
+	if (info->Author) {
+		strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+		bmi.author[sizeof(bmi.author) - 1] = '\0';
+	}
 
 	// Build param info array
 	int totalParams = bmi.numGlobalParams + bmi.numTrackParams;
@@ -536,8 +546,14 @@ static void HandleGetInfo() {
 		pi.noValue = bp->NoValue;
 		pi.defValue = bp->DefValue;
 		pi.flags = bp->Flags;
-		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
-		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+		if (bp->Name) {
+			strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+			pi.name[sizeof(pi.name) - 1] = '\0';
+		}
+		if (bp->Description) {
+			strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+			pi.description[sizeof(pi.description) - 1] = '\0';
+		}
 	}
 
 	for (int i = 0; i < bmi.numTrackParams; i++) {
@@ -549,8 +565,14 @@ static void HandleGetInfo() {
 		pi.noValue = bp->NoValue;
 		pi.defValue = bp->DefValue;
 		pi.flags = bp->Flags;
-		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
-		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+		if (bp->Name) {
+			strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+			pi.name[sizeof(pi.name) - 1] = '\0';
+		}
+		if (bp->Description) {
+			strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+			pi.description[sizeof(pi.description) - 1] = '\0';
+		}
 	}
 
 	uint32_t payloadSize = sizeof(bmi) + totalParams * sizeof(BridgeParamInfo);
