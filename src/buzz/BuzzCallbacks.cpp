@@ -93,7 +93,12 @@ void BuzzCallbacks::DeleteSequence(CSequence *pseq) {}
 CPattern *BuzzCallbacks::GetSequenceData(int const row) { return nullptr; }
 void BuzzCallbacks::SetSequenceData(int const row, CPattern *ppat) {}
 
-void BuzzCallbacks::SetMachineInterfaceEx(CMachineInterfaceEx *pex) { machineInterfaceEx = pex; }
+void BuzzCallbacks::SetMachineInterfaceEx(CMachineInterfaceEx *pex) {
+	char dbg[128];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] SetMachineInterfaceEx(%p)\n", (void*)pex);
+	OutputDebugStringA(dbg);
+	machineInterfaceEx = pex;
+}
 void BuzzCallbacks::ControlChange__obsolete__(int group, int track, int param, int value) {}
 
 int BuzzCallbacks::ADGetnumChannels(bool input) { return 0; }

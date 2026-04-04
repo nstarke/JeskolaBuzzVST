@@ -53,8 +53,10 @@ static void __fastcall StubMDKSetup(void* thisPtr, void* /*edx*/, int /*mode*/) 
 
 	if (!machine) return;
 
-	// Call machine->vtable[23](nullptr) to invoke MDKInit (FUN_100025FC)
-	// MDKInit signature: void __thiscall MDKInit(CMachineDataInput* pi)
+	// Call machine->vtable[23](nullptr) to invoke MDKInit.
+	// All MDK machines share the same CMDKMachineInterface vtable layout,
+	// so index 23 is consistent. But some machines' MDKInit may hang
+	// (e.g., waiting for a message loop). We use a thread with timeout.
 	typedef void (__thiscall *MDKInitFn)(void*, void*);
 	void** mVtable = *(void***)machine;
 	MDKInitFn mdkInit = (MDKInitFn)mVtable[23];
@@ -63,10 +65,55 @@ static void __fastcall StubMDKSetup(void* thisPtr, void* /*edx*/, int /*mode*/) 
 		(void*)mdkInit);
 	OutputDebugStringA(dbg);
 
-	mdkInit(machine, nullptr);
+	// Run MDKInit on a separate thread with a 3-second timeout.
+	// Some machines hang here (e.g., BTDSys Pulsar).
+	struct MDKInitParams {
+		MDKInitFn fn;
+		void* machine;
+		bool completed;
+		bool crashed;
+		DWORD exceptionCode;
+	};
+	MDKInitParams initParams = { mdkInit, machine, false, false, 0 };
 
-	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDKInit returned OK\n");
-	OutputDebugStringA(dbg);
+	HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID p) -> DWORD {
+		auto* params = (MDKInitParams*)p;
+		__try {
+			params->fn(params->machine, nullptr);
+			params->completed = true;
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			params->crashed = true;
+			params->exceptionCode = GetExceptionCode();
+		}
+		return 0;
+	}, &initParams, 0, nullptr);
+
+	if (hThread) {
+		DWORD waitResult = WaitForSingleObject(hThread, 3000);
+		if (waitResult == WAIT_TIMEOUT) {
+			OutputDebugStringA("[BuzzBridgeHost32] MDKInit TIMED OUT (3s) — machine may hang during Init\n");
+			TerminateThread(hThread, 1);
+		} else if (initParams.crashed) {
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDKInit CRASHED (exception 0x%08lX)\n",
+				initParams.exceptionCode);
+			OutputDebugStringA(dbg);
+		} else if (initParams.completed) {
+			OutputDebugStringA("[BuzzBridgeHost32] MDKInit returned OK\n");
+		}
+		CloseHandle(hThread);
+	} else {
+		// Fallback: call directly with SEH
+		__try {
+			mdkInit(machine, nullptr);
+			OutputDebugStringA("[BuzzBridgeHost32] MDKInit returned OK (direct call)\n");
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDKInit CRASHED (exception 0x%08lX)\n",
+				GetExceptionCode());
+			OutputDebugStringA(dbg);
+		}
+	}
 }
 
 // MDK Work proxy (vtable[6]): Called from CMDKMachineInterface::Work wrapper.
