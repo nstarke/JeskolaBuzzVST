@@ -396,7 +396,7 @@ tresult PLUGIN_API BuzzController::setComponentState(IBStream* state)
 	char pathBuf[1024] = {0};
 	Steinberg::int32 pathLen = 0;
 	if (!streamer.readInt32(pathLen)) return kResultFalse;
-	if (pathLen < 0 || pathLen >= 1024) pathLen = 0;
+	if (pathLen < 0 || pathLen >= 1024) return kResultFalse;
 	if (pathLen > 0) {
 		if (streamer.readRaw(pathBuf, pathLen) != pathLen) return kResultFalse;
 		pathBuf[pathLen] = 0;
@@ -428,9 +428,9 @@ tresult PLUGIN_API BuzzController::setComponentState(IBStream* state)
 	std::vector<std::vector<Steinberg::int32>> savedTrackValues;
 	if (streamer.readInt32(savedNumTracks) && streamer.readInt32(savedNumTrackParams)) {
 		if (savedNumTracks < 0) savedNumTracks = 0;
-		if (savedNumTracks > kMaxTracks) savedNumTracks = 0;
+		if (savedNumTracks > kMaxTracks) return kResultFalse;
 		if (savedNumTrackParams < 0) savedNumTrackParams = 0;
-		if (savedNumTrackParams > kMaxTrackParams) savedNumTrackParams = 0;
+		if (savedNumTrackParams > kMaxTrackParams) return kResultFalse;
 
 		if (savedNumTracks > 0 && savedNumTrackParams > 0) {
 			savedTrackValues.resize(savedNumTracks);

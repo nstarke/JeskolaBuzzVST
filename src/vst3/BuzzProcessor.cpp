@@ -98,7 +98,10 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 		processParameterChanges(data.inputParameterChanges);
 	}
 
-	// Sanity check numSamples
+	// Sanity check numSamples.  This is the VST3 process buffer limit,
+	// not the bridge limit (kBridgeMaxSamples).  65536 is generous but
+	// intentional: the host controls this value and some hosts use large
+	// buffer sizes.
 	if (data.numSamples <= 0 || data.numSamples > 65536)
 		return kResultOk;
 
@@ -915,7 +918,7 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 	char pathBuf[1024] = {0};
 	Steinberg::int32 pathLen = 0;
 	if (!streamer.readInt32(pathLen)) return kResultFalse;
-	if (pathLen < 0 || pathLen >= 1024) pathLen = 0; // reject invalid lengths
+	if (pathLen < 0 || pathLen >= 1024) return kResultFalse;
 	if (pathLen > 0) {
 		if (streamer.readRaw(pathBuf, pathLen) != pathLen) return kResultFalse;
 		pathBuf[pathLen] = 0;
@@ -950,9 +953,9 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 	if (streamer.readInt32(savedNumTracks) && streamer.readInt32(savedNumTrackParams)) {
 		// Validate both counts against hard limits
 		if (savedNumTracks < 0) savedNumTracks = 0;
-		if (savedNumTracks > kMaxTracks) savedNumTracks = 0; // reject, don't clamp
+		if (savedNumTracks > kMaxTracks) return kResultFalse;
 		if (savedNumTrackParams < 0) savedNumTrackParams = 0;
-		if (savedNumTrackParams > kMaxTrackParams) savedNumTrackParams = 0;
+		if (savedNumTrackParams > kMaxTrackParams) return kResultFalse;
 
 		if (savedNumTracks > 0 && savedNumTrackParams > 0) {
 			savedTrackValues.resize(savedNumTracks);

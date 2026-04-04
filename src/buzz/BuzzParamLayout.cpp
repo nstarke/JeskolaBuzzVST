@@ -1,4 +1,5 @@
 #include "BuzzParamLayout.h"
+#include <climits>
 #include <cstring>
 
 namespace BuzzVst {
@@ -125,8 +126,8 @@ void BuzzParamLayout::WriteTrackParam(void* trackVals, int trackIndex, int slotI
 {
 	if (!trackVals || slotIndex < 0 || slotIndex >= (int)trackSlots.size())
 		return;
-	if (trackIndex < 0 || trackStructSize <= 0) return;
-	if (trackIndex > 10000) return; // sanity limit
+	if (trackStructSize <= 0 || trackIndex < 0 || trackIndex > INT_MAX / trackStructSize)
+		return;
 
 	const ParamSlot& slot = trackSlots[slotIndex];
 	unsigned char* basePtr = (unsigned char*)trackVals + trackIndex * trackStructSize;
@@ -143,7 +144,7 @@ int BuzzParamLayout::ReadTrackParam(const void* trackVals, int trackIndex, int s
 {
 	if (!trackVals || slotIndex < 0 || slotIndex >= (int)trackSlots.size())
 		return 0;
-	if (trackIndex < 0 || trackStructSize <= 0 || trackIndex > 10000)
+	if (trackStructSize <= 0 || trackIndex < 0 || trackIndex > INT_MAX / trackStructSize)
 		return 0;
 
 	const ParamSlot& slot = trackSlots[slotIndex];
