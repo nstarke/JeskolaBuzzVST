@@ -176,6 +176,7 @@ public:
 
 	// MDK stub - returned by GetNearestWaveLevel(-1, -1) for MDK-based machines
 	void* mdkStub = nullptr;
+	bool isMDKMachine = false;  // true if machine called GetNearestWaveLevel(-1,-1)
 
 private:
 	CRITICAL_SECTION cs;

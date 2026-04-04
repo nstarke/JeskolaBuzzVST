@@ -54,9 +54,9 @@ void GeneratorProcessor::processAudioBlock(float** inputs, float** outputs,
 				OutputDebugStringA(dbg);
 			}
 			for (int32 i = 0; i < numSamples; i++) {
-				outputs[0][i] = audio->outputLeft[i] * kBuzzToVst3Scale;
+				outputs[0][i] = BuzzSampleToVst3(audio->outputLeft[i]);
 				if (numOutputChannels >= 2)
-					outputs[1][i] = audio->outputRight[i] * kBuzzToVst3Scale;
+					outputs[1][i] = BuzzSampleToVst3(audio->outputRight[i]);
 			}
 		} else {
 			static int noOutputLog = 0;

@@ -93,9 +93,9 @@ void EffectProcessor::processAudioBlock(float** inputs, float** outputs,
 	}
 	if (workOk && audio->hasOutput) {
 		for (int32 i = 0; i < numSamples; i++) {
-			outputs[0][i] = audio->outputLeft[i] * kBuzzToVst3Scale;
+			outputs[0][i] = BuzzSampleToVst3(audio->outputLeft[i]);
 			if (numOutputChannels >= 2)
-				outputs[1][i] = audio->outputRight[i] * kBuzzToVst3Scale;
+				outputs[1][i] = BuzzSampleToVst3(audio->outputRight[i]);
 		}
 	} else if (hasInput) {
 		// Effect produced no output — pass input through (transparent)

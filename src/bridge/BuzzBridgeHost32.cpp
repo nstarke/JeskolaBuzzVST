@@ -143,6 +143,8 @@ static void HandleInitMachine() {
 }
 
 static void HandleUnload() {
+	g_loader.GetCallbacks()->isMDKMachine = false;
+	g_loader.GetCallbacks()->mdkStub = nullptr;
 	g_loader.Unload();
 	g_pipe.SendResponse(kRespOk);
 }
