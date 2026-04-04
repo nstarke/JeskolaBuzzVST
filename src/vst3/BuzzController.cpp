@@ -28,13 +28,12 @@ BuzzController::~BuzzController()
 
 void BuzzController::initPreallocatedParams()
 {
-	// Pre-allocate global parameter slots (hidden until a machine loads)
+	// Pre-allocate global parameter slots.
+	// Use kIsHidden | kIsReadOnly so they don't appear in automation/MIDI lists.
+	// Active params will be revealed with kCanAutomate when a machine loads.
 	for (int i = 0; i < kMaxGlobalParams; i++) {
-		char name[32];
-		snprintf(name, sizeof(name), "Param %d", i + 1);
-
 		Steinberg::Vst::String128 name16;
-		Steinberg::UString(name16, 128).fromAscii(name);
+		Steinberg::UString(name16, 128).fromAscii("");
 
 		Steinberg::Vst::String128 units;
 		units[0] = 0;
@@ -46,14 +45,11 @@ void BuzzController::initPreallocatedParams()
 		);
 	}
 
-	// Pre-allocate track parameter slots for all tracks (hidden)
+	// Pre-allocate track parameter slots for all tracks
 	for (int t = 0; t < kMaxTracks; t++) {
 		for (int i = 0; i < kMaxTrackParams; i++) {
-			char name[48];
-			snprintf(name, sizeof(name), "T%d Param %d", t, i + 1);
-
 			Steinberg::Vst::String128 name16;
-			Steinberg::UString(name16, 128).fromAscii(name);
+			Steinberg::UString(name16, 128).fromAscii("");
 
 			Steinberg::Vst::String128 units;
 			units[0] = 0;
@@ -206,7 +202,13 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 			checkPendingScanResults();
 		};
 
+		wireParamCallbacks(view);
+
 		activeView = view;
+
+		// Push current param info to the view
+		pushParamInfoToView();
+
 		return view;
 	}
 	return nullptr;
@@ -650,6 +652,9 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 				}
 			}
 
+			// Push param info to view (covers both direct-load and message-based paths)
+			pushParamInfoToView();
+
 			if (componentHandler) {
 				OutputDebugStringA("[BuzzBridge] Controller: calling restartComponent\n");
 				tresult rr = componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
@@ -716,10 +721,7 @@ void BuzzController::resetParameters()
 			info.flags = ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly;
 			info.stepCount = 0;
 			info.defaultNormalizedValue = 0.0;
-
-			char name[32];
-			snprintf(name, sizeof(name), "Param %d", i + 1);
-			Steinberg::UString(info.title, 128).fromAscii(name);
+			Steinberg::UString(info.title, 128).fromAscii("");
 			info.shortTitle[0] = 0;
 			info.units[0] = 0;
 		}
@@ -919,6 +921,78 @@ tresult PLUGIN_API BuzzController::queryInterface(const char* iid, void** obj)
 {
 	QUERY_INTERFACE(iid, obj, IMidiMapping::iid, IMidiMapping)
 	return EditController::queryInterface(iid, obj);
+}
+
+void BuzzController::pushParamInfoToView()
+{
+	if (!activeView) return;
+
+	std::vector<ParamViewInfo> infos;
+
+	// Global params
+	for (int i = 0; i < activeGlobalParams; i++) {
+		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+		if (!param) continue;
+
+		ParameterInfo& pinfo = param->getInfo();
+		if (pinfo.flags & ParameterInfo::kIsHidden) continue;
+
+		ParamViewInfo pvi;
+		pvi.paramId = kBuzzGlobalParamBase + i;
+
+		// Convert title to std::string
+		char nameBuf[256] = {};
+		Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
+		pvi.name = nameBuf;
+		pvi.stepCount = pinfo.stepCount;
+		pvi.normalizedValue = param->getNormalized();
+		infos.push_back(pvi);
+	}
+
+	// Track 0 params
+	for (int i = 0; i < activeTrackParams; i++) {
+		ParamID paramId = kBuzzTrackParamBase + i;
+		Parameter* param = parameters.getParameter(paramId);
+		if (!param) continue;
+
+		ParameterInfo& pinfo = param->getInfo();
+		if (pinfo.flags & ParameterInfo::kIsHidden) continue;
+
+		ParamViewInfo pvi;
+		pvi.paramId = paramId;
+
+		char nameBuf[256] = {};
+		Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
+		pvi.name = nameBuf;
+		pvi.stepCount = pinfo.stepCount;
+		pvi.normalizedValue = param->getNormalized();
+		infos.push_back(pvi);
+	}
+
+	activeView->setParamInfo(infos);
+}
+
+void BuzzController::wireParamCallbacks(BuzzPluginView* view)
+{
+	view->onParamBeginEdit = [this](ParamID id) {
+		beginEdit(id);
+	};
+	view->onParamChanged = [this](ParamID id, double value) {
+		performEdit(id, value);
+		setParamNormalized(id, value);
+	};
+	view->onParamEndEdit = [this](ParamID id) {
+		endEdit(id);
+	};
+}
+
+tresult PLUGIN_API BuzzController::setParamNormalized(ParamID tag, ParamValue value)
+{
+	tresult result = EditController::setParamNormalized(tag, value);
+	if (result == kResultOk && activeView) {
+		activeView->updateParamValue(tag, value);
+	}
+	return result;
 }
 
 } // namespace BuzzVst

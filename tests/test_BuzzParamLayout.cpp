@@ -34,7 +34,7 @@ TEST(ParamLayout, ByteSizeWord) {
 }
 
 TEST(ParamLayout, ByteSizeNote) {
-	ASSERT_EQ(BuzzParamLayout::GetParamByteSize(pt_note), 2);
+	ASSERT_EQ(BuzzParamLayout::GetParamByteSize(pt_note), 1);
 }
 
 TEST(ParamLayout, ByteSizeInternal) {
@@ -107,14 +107,14 @@ TEST(ParamLayout, BuildGlobalAndTrack) {
 	layout.Build(&info);
 
 	ASSERT_EQ(layout.GetGlobalStructSize(), 1);  // 1 byte param
-	ASSERT_EQ(layout.GetTrackStructSize(), 3);    // note(2) + byte(1)
+	ASSERT_EQ(layout.GetTrackStructSize(), 2);    // note(1) + byte(1)
 	ASSERT_EQ(layout.GetTotalParamCount(), 3);
 
 	auto& tSlots = layout.GetTrackSlots();
 	ASSERT_EQ((int)tSlots.size(), 2);
 	ASSERT_EQ(tSlots[0].byteOffset, 0);
-	ASSERT_EQ(tSlots[0].byteSize, 2);  // note = word
-	ASSERT_EQ(tSlots[1].byteOffset, 2);
+	ASSERT_EQ(tSlots[0].byteSize, 1);  // note = byte
+	ASSERT_EQ(tSlots[1].byteOffset, 1);
 	ASSERT_EQ(tSlots[1].byteSize, 1);  // byte
 }
 

@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <commctrl.h>
 #include <commdlg.h>
 #include <shlobj.h>
 #include "BuzzPluginView.h"
@@ -12,7 +13,9 @@ namespace BuzzVst {
 using namespace Steinberg;
 
 static const wchar_t* kWindowClassName = L"BuzzPluginViewClass";
+static const wchar_t* kParamPanelClassName = L"BuzzParamPanelClass";
 static bool sClassRegistered = false;
+static bool sParamPanelClassRegistered = false;
 
 BuzzPluginView::BuzzPluginView(const std::string& currentPath,
                                const std::string& name,
@@ -137,6 +140,9 @@ tresult PLUGIN_API BuzzPluginView::removed()
 		hwndTrackLabel = nullptr;
 		hwndGearLabel = nullptr;
 		hwndMachineList = nullptr;
+		hwndParamPanel = nullptr;
+		hwndParamLabel = nullptr;
+		paramControls.clear();
 	}
 	hwndParent = nullptr;
 	return CPluginView::removed();
@@ -149,9 +155,11 @@ void BuzzPluginView::recreateControls()
 	std::string savedDllPath = dllPath;
 	std::string savedGearDir = gearDir;
 	bool wasScanning = scanning.load();
+	std::vector<ParamViewInfo> savedParamInfos = paramInfos;
 
 	// Destroy old controls
 	destroyFonts();
+	paramControls.clear();
 	if (hwndContainer) {
 		DestroyWindow(hwndContainer);
 		hwndContainer = nullptr;
@@ -170,11 +178,24 @@ void BuzzPluginView::recreateControls()
 	} else if (!gearEntries.empty()) {
 		populateMachineList();
 	}
+
+	// Restore param info
+	if (!savedParamInfos.empty()) {
+		paramInfos = savedParamInfos;
+		destroyParamControls();
+		createParamControls();
+	}
 }
 
 void BuzzPluginView::createControls(HWND parent)
 {
 	HINSTANCE hInst = GetModuleHandle(nullptr);
+
+	// Init common controls for trackbar support
+	INITCOMMONCONTROLSEX icc = {};
+	icc.dwSize = sizeof(icc);
+	icc.dwICC = ICC_BAR_CLASSES;
+	InitCommonControlsEx(&icc);
 
 	if (!sClassRegistered) {
 		WNDCLASSEXW wc = {};
@@ -186,6 +207,18 @@ void BuzzPluginView::createControls(HWND parent)
 		wc.lpszClassName = kWindowClassName;
 		RegisterClassExW(&wc);
 		sClassRegistered = true;
+	}
+
+	if (!sParamPanelClassRegistered) {
+		WNDCLASSEXW wc = {};
+		wc.cbSize = sizeof(wc);
+		wc.lpfnWndProc = ParamPanelWndProc;
+		wc.hInstance = hInst;
+		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+		wc.hbrBackground = (HBRUSH)(COLOR_3DFACE + 1);
+		wc.lpszClassName = kParamPanelClassName;
+		RegisterClassExW(&wc);
+		sParamPanelClassRegistered = true;
 	}
 
 	createFonts();
@@ -294,6 +327,23 @@ void BuzzPluginView::createControls(HWND parent)
 
 	setTrackInfo(currentTracks, minTracks, maxTracks);
 	y += S(28);
+
+	// Parameters label
+	hwndParamLabel = CreateWindowExW(0, L"STATIC", L"Parameters",
+		WS_CHILD | WS_VISIBLE | SS_LEFT,
+		innerMargin, y, w - 2 * innerMargin, S(16), hwndContainer, nullptr, hInst, nullptr);
+	SendMessage(hwndParamLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
+	y += S(18);
+
+	// Scrollable parameter panel
+	int paramPanelHeight = S(200);
+	hwndParamPanel = CreateWindowExW(WS_EX_CLIENTEDGE, kParamPanelClassName, L"",
+		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN,
+		innerMargin, y, w - 2 * innerMargin, paramPanelHeight,
+		hwndContainer, nullptr, hInst, this);
+	y += paramPanelHeight + S(4);
+
+	createParamControls();
 
 	// Gear directory label
 	hwndGearLabel = CreateWindowExW(0, L"STATIC", L"Gear folder: (not set)",
@@ -713,6 +763,196 @@ void BuzzPluginView::setGearEntries(const std::vector<GearEntry>& entries)
 {
 	gearEntries = entries;
 	populateMachineList();
+}
+
+LRESULT CALLBACK BuzzPluginView::ParamPanelWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (msg == WM_CREATE) {
+		auto* cs = (CREATESTRUCT*)lParam;
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
+		return 0;
+	}
+
+	auto* self = (BuzzPluginView*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+	switch (msg) {
+		case WM_VSCROLL: {
+			if (!self) break;
+			SCROLLINFO si = {};
+			si.cbSize = sizeof(si);
+			si.fMask = SIF_ALL;
+			GetScrollInfo(hWnd, SB_VERT, &si);
+
+			int oldPos = si.nPos;
+			switch (LOWORD(wParam)) {
+				case SB_LINEUP:    si.nPos -= self->S(22); break;
+				case SB_LINEDOWN:  si.nPos += self->S(22); break;
+				case SB_PAGEUP:    si.nPos -= si.nPage; break;
+				case SB_PAGEDOWN:  si.nPos += si.nPage; break;
+				case SB_THUMBTRACK: si.nPos = si.nTrackPos; break;
+			}
+
+			si.fMask = SIF_POS;
+			SetScrollInfo(hWnd, SB_VERT, &si, TRUE);
+			GetScrollInfo(hWnd, SB_VERT, &si); // get clamped value
+
+			if (si.nPos != oldPos) {
+				ScrollWindowEx(hWnd, 0, oldPos - si.nPos, nullptr, nullptr, nullptr, nullptr,
+					SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+				self->paramScrollPos = si.nPos;
+			}
+			return 0;
+		}
+
+		case WM_HSCROLL: {
+			// Trackbar notifications come as WM_HSCROLL
+			if (!self) break;
+			HWND hwndTrackbar = (HWND)lParam;
+			if (!hwndTrackbar) break;
+
+			int ctrlId = GetDlgCtrlID(hwndTrackbar);
+			int paramIndex = ctrlId - kParamSliderBaseID;
+			if (paramIndex < 0 || paramIndex >= (int)self->paramControls.size()) break;
+
+			auto& pc = self->paramControls[paramIndex];
+			int pos = (int)SendMessage(hwndTrackbar, TBM_GETPOS, 0, 0);
+			int rangeMax = (int)SendMessage(hwndTrackbar, TBM_GETRANGEMAX, 0, 0);
+			double normalized = (rangeMax > 0) ? (double)pos / (double)rangeMax : 0.0;
+
+			int code = LOWORD(wParam);
+			if (code == TB_THUMBTRACK || code == TB_THUMBPOSITION) {
+				if (self->onParamBeginEdit)
+					self->onParamBeginEdit(pc.paramId);
+				if (self->onParamChanged)
+					self->onParamChanged(pc.paramId, normalized);
+			} else if (code == TB_ENDTRACK) {
+				// Final position
+				if (self->onParamChanged)
+					self->onParamChanged(pc.paramId, normalized);
+				if (self->onParamEndEdit)
+					self->onParamEndEdit(pc.paramId);
+			} else {
+				// Other scroll codes (line/page)
+				if (self->onParamBeginEdit)
+					self->onParamBeginEdit(pc.paramId);
+				if (self->onParamChanged)
+					self->onParamChanged(pc.paramId, normalized);
+				if (self->onParamEndEdit)
+					self->onParamEndEdit(pc.paramId);
+			}
+			return 0;
+		}
+
+		case WM_ERASEBKGND: {
+			HDC hdc = (HDC)wParam;
+			RECT rc;
+			GetClientRect(hWnd, &rc);
+			FillRect(hdc, &rc, (HBRUSH)(COLOR_3DFACE + 1));
+			return 1;
+		}
+	}
+
+	return DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+void BuzzPluginView::createParamControls()
+{
+	if (!hwndParamPanel) return;
+
+	HINSTANCE hInst = GetModuleHandle(nullptr);
+	int rowHeight = S(22);
+	int labelWidth = S(120);
+	int margin = S(4);
+
+	RECT panelRect;
+	GetClientRect(hwndParamPanel, &panelRect);
+	int panelWidth = panelRect.right - panelRect.left;
+	int sliderWidth = panelWidth - labelWidth - margin * 3;
+	if (sliderWidth < S(50)) sliderWidth = S(50);
+
+	paramScrollPos = 0;
+
+	for (int i = 0; i < (int)paramInfos.size(); i++) {
+		const auto& pi = paramInfos[i];
+		ParamControl pc;
+		pc.paramId = pi.paramId;
+		pc.stepCount = pi.stepCount;
+
+		int y = i * rowHeight;
+
+		// Create label
+		std::wstring wname(pi.name.begin(), pi.name.end());
+		pc.hwndLabel = CreateWindowExW(0, L"STATIC", wname.c_str(),
+			WS_CHILD | WS_VISIBLE | SS_LEFT | SS_ENDELLIPSIS,
+			margin, y + S(2), labelWidth, S(16),
+			hwndParamPanel, (HMENU)(INT_PTR)(kParamLabelBaseID + i), hInst, nullptr);
+		SendMessage(pc.hwndLabel, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+
+		// Create trackbar
+		pc.hwndTrackbar = CreateWindowExW(0, TRACKBAR_CLASSW, L"",
+			WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
+			labelWidth + margin * 2, y, sliderWidth, rowHeight,
+			hwndParamPanel, (HMENU)(INT_PTR)(kParamSliderBaseID + i), hInst, nullptr);
+
+		int rangeMax = (pi.stepCount > 0) ? pi.stepCount : 1000;
+		SendMessage(pc.hwndTrackbar, TBM_SETRANGEMIN, FALSE, 0);
+		SendMessage(pc.hwndTrackbar, TBM_SETRANGEMAX, FALSE, rangeMax);
+		int pos = (int)(pi.normalizedValue * rangeMax + 0.5);
+		SendMessage(pc.hwndTrackbar, TBM_SETPOS, TRUE, pos);
+
+		paramControls.push_back(pc);
+	}
+
+	// Set scroll range
+	int totalHeight = (int)paramInfos.size() * rowHeight;
+	int panelHeight = panelRect.bottom - panelRect.top;
+
+	SCROLLINFO si = {};
+	si.cbSize = sizeof(si);
+	si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+	si.nMin = 0;
+	si.nMax = totalHeight > 0 ? totalHeight - 1 : 0;
+	si.nPage = panelHeight;
+	si.nPos = 0;
+	SetScrollInfo(hwndParamPanel, SB_VERT, &si, TRUE);
+}
+
+void BuzzPluginView::destroyParamControls()
+{
+	for (auto& pc : paramControls) {
+		if (pc.hwndLabel) DestroyWindow(pc.hwndLabel);
+		if (pc.hwndTrackbar) DestroyWindow(pc.hwndTrackbar);
+	}
+	paramControls.clear();
+	paramScrollPos = 0;
+}
+
+void BuzzPluginView::setParamInfo(const std::vector<ParamViewInfo>& params)
+{
+	paramInfos = params;
+	destroyParamControls();
+	createParamControls();
+}
+
+void BuzzPluginView::updateParamValue(Steinberg::Vst::ParamID id, double normalizedValue)
+{
+	updatingFromHost = true;
+	for (auto& pc : paramControls) {
+		if (pc.paramId == id) {
+			int rangeMax = (int)SendMessage(pc.hwndTrackbar, TBM_GETRANGEMAX, 0, 0);
+			int pos = (int)(normalizedValue * rangeMax + 0.5);
+			SendMessage(pc.hwndTrackbar, TBM_SETPOS, TRUE, pos);
+			break;
+		}
+	}
+	// Also update the cached value in paramInfos
+	for (auto& pi : paramInfos) {
+		if (pi.paramId == id) {
+			pi.normalizedValue = normalizedValue;
+			break;
+		}
+	}
+	updatingFromHost = false;
 }
 
 } // namespace BuzzVst

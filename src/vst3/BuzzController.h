@@ -36,6 +36,7 @@ public:
 	tresult PLUGIN_API setState(IBStream* state) SMTG_OVERRIDE;
 	tresult PLUGIN_API getState(IBStream* state) SMTG_OVERRIDE;
 	tresult PLUGIN_API notify(IMessage* message) SMTG_OVERRIDE;
+	tresult PLUGIN_API setParamNormalized(ParamID tag, ParamValue value) SMTG_OVERRIDE;
 	IPlugView* PLUGIN_API createView(const char* name) SMTG_OVERRIDE;
 
 	// IMidiMapping
@@ -75,6 +76,8 @@ private:
 	typedef CMachineInfo const* (__cdecl *GetInfoFunc)();
 
 	void initPreallocatedParams();
+	void pushParamInfoToView();
+	void wireParamCallbacks(BuzzPluginView* view);
 
 	// Background gear scan
 	std::thread bgScanThread;

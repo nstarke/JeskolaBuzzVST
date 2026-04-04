@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <cfloat>
 #include "TestFramework.h"
 #include "../src/buzz/MachineInterface.h"
 #include "../src/buzz/BuzzMachineLoader.h"
@@ -291,6 +292,9 @@ TEST(MachineLoader, WorkProducesOutput) {
 }
 
 TEST(MachineLoader, FSMKickXPWithNote) {
+	unsigned int fpuCw = _controlfp(0, 0);
+	printf("  (FPU=0x%08X) ", fpuCw);
+
 	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
@@ -376,16 +380,12 @@ TEST(MachineLoader, FSMInfectorProducesOutput) {
 	// Also try MidiNote directly
 	SEH_Call([&]() { machine->MidiNote(0, 60, 127); });
 
-	// Second tick: write note C-5 (0x51=81) to first pt_note track param
-	layout->WriteAllNoValues(machine->GlobalVals);
+	// Second tick: write note C-5 (0x51=81) to first pt_note track param.
+	// Only write the note and velocity — leave other params untouched.
 	if (machine->TrackVals) {
-		// Reset track to NoValues
-		layout->WriteTrackAllNoValues(machine->TrackVals, 1);
-		// Write note
 		for (int i = 0; i < (int)tSlots.size(); i++) {
 			if (tSlots[i].param->Type == pt_note) {
 				layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51); // C-5
-				// Write velocity to next byte param if exists
 				if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte) {
 					layout->WriteTrackParam(machine->TrackVals, 0, i+1, 189); // default vel
 				}

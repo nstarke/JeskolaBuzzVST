@@ -1,8 +1,10 @@
 #pragma once
 
 #include <windows.h>
+#include <commctrl.h>
 #include "public.sdk/source/common/pluginview.h"
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
+#include "pluginterfaces/vst/vsttypes.h"
 #include "GearScanner.h"
 #include <string>
 #include <vector>
@@ -11,6 +13,13 @@
 #include <atomic>
 
 namespace BuzzVst {
+
+struct ParamViewInfo {
+	Steinberg::Vst::ParamID paramId;
+	std::string name;
+	int32_t stepCount;
+	double normalizedValue;
+};
 
 // Native Win32 GUI for selecting a Buzz machine DLL.
 // Supports HiDPI via IPlugViewContentScaleSupport — the host provides a scale
@@ -31,6 +40,9 @@ public:
 	std::function<void(int slotIndex, const std::string& wavPath)> onSampleSlotChanged;
 	std::function<void(int delta)> onTrackCountChanged; // delta: +1 or -1
 	std::function<void()> onCheckScanResults; // controller polls scan results
+	std::function<void(Steinberg::Vst::ParamID id)> onParamBeginEdit;
+	std::function<void(Steinberg::Vst::ParamID id, double value)> onParamChanged;
+	std::function<void(Steinberg::Vst::ParamID id)> onParamEndEdit;
 
 	// Update display
 	void setMachineName(const std::string& name);
@@ -40,6 +52,8 @@ public:
 	void setWaveSlots(const std::vector<std::string>& slotNames);
 	void setTrackInfo(int current, int min, int max);
 	void showScanningIndicator();
+	void setParamInfo(const std::vector<ParamViewInfo>& params);
+	void updateParamValue(Steinberg::Vst::ParamID id, double normalizedValue);
 
 	// IPlugView
 	Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) SMTG_OVERRIDE;
@@ -64,7 +78,15 @@ private:
 	void recreateControls();
 	void populateMachineList();
 
+	struct ParamControl {
+		HWND hwndLabel = nullptr;
+		HWND hwndTrackbar = nullptr;
+		Steinberg::Vst::ParamID paramId = 0;
+		int32_t stepCount = 0;
+	};
+
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK ParamPanelWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	void onBrowseDllClicked();
 	void onBrowseGearClicked();
 	void onLoadSamplesClicked();
@@ -72,6 +94,8 @@ private:
 	void onWaveListDoubleClick();
 	void onScanComplete();
 	void populateWaveList();
+	void createParamControls();
+	void destroyParamControls();
 
 	// Scale a base pixel value by the current DPI factor
 	int S(int basePixels) const { return (int)(basePixels * scaleFactor + 0.5f); }
@@ -91,6 +115,8 @@ private:
 	HWND hwndTrackLabel = nullptr;
 	HWND hwndGearLabel = nullptr;
 	HWND hwndMachineList = nullptr;
+	HWND hwndParamPanel = nullptr;
+	HWND hwndParamLabel = nullptr;
 
 	// Fonts (recreated on scale change)
 	HFONT hBoldFont = nullptr;
@@ -106,12 +132,17 @@ private:
 	std::atomic<bool> scanning{false};
 	std::thread scanThread;
 
+	std::vector<ParamViewInfo> paramInfos;
+	std::vector<ParamControl> paramControls;
+	int paramScrollPos = 0;
+	bool updatingFromHost = false; // guard to avoid feedback loops
+
 	// Base (unscaled) dimensions
 	std::vector<std::string> waveSlotNames; // slot names (index = slot-1)
 	static const int kVisibleWaveSlots = 16; // how many slots to show in the list
 
 	static const int kBaseWidth = 500;
-	static const int kBaseHeight = 530;
+	static const int kBaseHeight = 730;
 	static const int kDllButtonID = 1001;
 	static const int kGearButtonID = 1002;
 	static const int kMachineListID = 1003;
@@ -119,6 +150,8 @@ private:
 	static const int kWaveListID = 1005;
 	static const int kAddTrackButtonID = 1006;
 	static const int kRemoveTrackButtonID = 1007;
+	static const int kParamSliderBaseID = 2000;
+	static const int kParamLabelBaseID = 3000;
 
 public:
 	// Track state (public so controller can read for delta calculation)

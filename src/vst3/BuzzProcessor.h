@@ -113,6 +113,10 @@ protected:
 	int machineMaxTracks = 0;
 	int numTrackParams = 0; // params per track
 
+	// Deferred note-off: if a note-off arrives before a pending note-on is ticked,
+	// defer it so the machine sees the note-on first.
+	bool pendingNoteOff = false;
+
 	// Tick timing
 	int samplesUntilNextTick = 0;
 	bool firstTick = true;

@@ -14,7 +14,7 @@ static BuzzPluginView* MakeView() {
 
 // Base dimensions from the view (keep in sync with BuzzPluginView.h)
 static const int BASE_W = 500;
-static const int BASE_H = 530;
+static const int BASE_H = 730;
 
 static int Scaled(int base, float factor) {
 	return (int)(base * factor + 0.5f);

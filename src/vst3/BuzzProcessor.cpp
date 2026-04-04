@@ -246,6 +246,13 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 #endif
 			samplesUntilNextTick = samplesPerTick;
 			firstTick = false;
+
+			// Apply deferred note-off (from a short gate where note-off arrived
+			// before the note-on was ticked)
+			if (pendingNoteOff) {
+				pendingNoteOff = false;
+				writeNoteToParams(NOTE_OFF);
+			}
 		}
 
 		int32 blockSize = std::min(samplesRemaining, samplesUntilNextTick);
@@ -305,16 +312,30 @@ void BuzzProcessor::processParameterChanges(IParameterChanges* changes)
 
 		if (!machineReady) continue;
 
-		auto* layout = loader.GetParamLayout();
-		auto& globalSlots = layout->GetGlobalSlots();
-		auto& trackSlots = layout->GetTrackSlots();
+		int numGlobal = (int)currentGlobalValues.size();
 
 		// Check if it's a global parameter
-		if (id >= kBuzzGlobalParamBase && id < kBuzzGlobalParamBase + (int)globalSlots.size()) {
+		if (id >= kBuzzGlobalParamBase && id < kBuzzGlobalParamBase + numGlobal) {
 			int slotIdx = id - kBuzzGlobalParamBase;
-			int buzzVal = ParameterMapping::NormalizedToBuzz(value, globalSlots[slotIdx].param);
-			currentGlobalValues[slotIdx] = buzzVal;
-			globalParamChanged[slotIdx] = true;
+#ifdef BUZZVST_64BIT
+			if (slotIdx < (int)bridgeParamInfos.size()) {
+				auto& pi = bridgeParamInfos[slotIdx];
+				int range = pi.maxValue - pi.minValue;
+				int buzzVal = (range > 0) ? pi.minValue + (int)(value * range + 0.5) : pi.minValue;
+				if (buzzVal < pi.minValue) buzzVal = pi.minValue;
+				if (buzzVal > pi.maxValue) buzzVal = pi.maxValue;
+				currentGlobalValues[slotIdx] = buzzVal;
+				globalParamChanged[slotIdx] = true;
+			}
+#else
+			auto* layout = loader.GetParamLayout();
+			auto& globalSlots = layout->GetGlobalSlots();
+			if (slotIdx < (int)globalSlots.size()) {
+				int buzzVal = ParameterMapping::NormalizedToBuzz(value, globalSlots[slotIdx].param);
+				currentGlobalValues[slotIdx] = buzzVal;
+				globalParamChanged[slotIdx] = true;
+			}
+#endif
 		}
 		// Check if it's a track parameter (decode track index from ID)
 		else if (id >= kBuzzTrackParamBase) {
@@ -322,10 +343,27 @@ void BuzzProcessor::processParameterChanges(IParameterChanges* changes)
 			int trackIdx = trackOffset / kTrackParamStride;
 			int slotIdx = trackOffset % kTrackParamStride;
 			if (trackIdx >= 0 && trackIdx < numTracks &&
-			    slotIdx >= 0 && slotIdx < (int)trackSlots.size()) {
-				int buzzVal = ParameterMapping::NormalizedToBuzz(value, trackSlots[slotIdx].param);
-				currentTrackValues[trackIdx][slotIdx] = buzzVal;
-				trackParamChanged[trackIdx][slotIdx] = true;
+			    slotIdx >= 0 && slotIdx < numTrackParams) {
+#ifdef BUZZVST_64BIT
+				int piIdx = numGlobal + slotIdx;
+				if (piIdx < (int)bridgeParamInfos.size()) {
+					auto& pi = bridgeParamInfos[piIdx];
+					int range = pi.maxValue - pi.minValue;
+					int buzzVal = (range > 0) ? pi.minValue + (int)(value * range + 0.5) : pi.minValue;
+					if (buzzVal < pi.minValue) buzzVal = pi.minValue;
+					if (buzzVal > pi.maxValue) buzzVal = pi.maxValue;
+					currentTrackValues[trackIdx][slotIdx] = buzzVal;
+					trackParamChanged[trackIdx][slotIdx] = true;
+				}
+#else
+				auto* layout = loader.GetParamLayout();
+				auto& trackSlots = layout->GetTrackSlots();
+				if (slotIdx < (int)trackSlots.size()) {
+					int buzzVal = ParameterMapping::NormalizedToBuzz(value, trackSlots[slotIdx].param);
+					currentTrackValues[trackIdx][slotIdx] = buzzVal;
+					trackParamChanged[trackIdx][slotIdx] = true;
+				}
+#endif
 			}
 		}
 	}
@@ -502,6 +540,7 @@ void BuzzProcessor::processMidiEvents(IEventList* events)
 				if (velocity < 0) velocity = 0;
 				if (velocity > 127) velocity = 127;
 
+				pendingNoteOff = false; // cancel any deferred note-off
 				writeNoteToParams(MidiNoteToBuzz(midiNote), velocity);
 
 #ifdef BUZZVST_64BIT
@@ -515,15 +554,47 @@ void BuzzProcessor::processMidiEvents(IEventList* events)
 			}
 
 			case Event::kNoteOffEvent: {
-				writeNoteToParams(NOTE_OFF);
-
+				// If there's a pending note-on that hasn't been ticked yet, defer the
+				// note-off so the machine sees the note-on first on the next tick.
+				bool noteStillPending = false;
 #ifdef BUZZVST_64BIT
-				bridge.SendMidiNote(event.noteOff.channel, event.noteOff.pitch, 0);
+				if (bridgeTrackNoteSlot >= 0 && !currentTrackValues.empty()) {
+					auto& tp = trackParamChanged[0];
+					if (bridgeTrackNoteSlot < (int)tp.size() && tp[bridgeTrackNoteSlot]) {
+						int val = currentTrackValues[0][bridgeTrackNoteSlot];
+						if (val != NOTE_OFF && val != NOTE_NO)
+							noteStillPending = true;
+					}
+				}
 #else
-				if (auto* machine = loader.GetMachine()) {
-					SEH_Call([&]() { machine->MidiNote(event.noteOff.channel, event.noteOff.pitch, 0); });
+				{
+					auto* layout = loader.GetParamLayout();
+					auto& tSlots = layout->GetTrackSlots();
+					for (int j = 0; j < (int)tSlots.size(); j++) {
+						if (tSlots[j].param->Type == pt_note && !currentTrackValues.empty()) {
+							auto& tp = trackParamChanged[0];
+							if (j < (int)tp.size() && tp[j]) {
+								int val = currentTrackValues[0][j];
+								if (val != NOTE_OFF && val != NOTE_NO)
+									noteStillPending = true;
+							}
+							break;
+						}
+					}
 				}
 #endif
+				if (noteStillPending) {
+					pendingNoteOff = true;
+				} else {
+					writeNoteToParams(NOTE_OFF);
+#ifdef BUZZVST_64BIT
+					bridge.SendMidiNote(event.noteOff.channel, event.noteOff.pitch, 0);
+#else
+					if (auto* machine = loader.GetMachine()) {
+						SEH_Call([&]() { machine->MidiNote(event.noteOff.channel, event.noteOff.pitch, 0); });
+					}
+#endif
+				}
 				break;
 			}
 

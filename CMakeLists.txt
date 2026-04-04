@@ -87,7 +87,7 @@ target_include_directories(BuzzBridge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(BuzzBridge PRIVATE sdk)
+target_link_libraries(BuzzBridge PRIVATE sdk comctl32)
 target_compile_features(BuzzBridge PUBLIC cxx_std_17)
 
 if(MSVC)
@@ -160,6 +160,7 @@ if(NOT BUZZVST_64BIT)
         tests/test_HiDPI.cpp
         tests/test_WaveTable.cpp
         tests/test_MultiTrack.cpp
+        tests/test_ParamSliders.cpp
     )
 
     add_executable(BuzzBridgeTests
@@ -197,7 +198,7 @@ if(NOT BUZZVST_64BIT)
 
     if(SMTG_WIN)
         target_link_libraries(BuzzBridgeTests PRIVATE
-            kernel32 comdlg32 user32 gdi32 shell32 ole32
+            kernel32 comdlg32 user32 gdi32 shell32 ole32 comctl32
         )
     endif()
 
@@ -206,4 +207,18 @@ if(NOT BUZZVST_64BIT)
     )
 
     add_test(NAME BuzzBridgeTests COMMAND BuzzBridgeTests)
+
+    # Standalone work test (for debugging audio issues)
+    add_executable(WorkTest
+        tests/test_WorkDirect.cpp
+        ${BUZZ_SOURCES}
+        src/bridge/BridgeClient.cpp
+    )
+    target_include_directories(WorkTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_features(WorkTest PUBLIC cxx_std_17)
+    if(MSVC)
+        target_compile_options(WorkTest PRIVATE /EHa)
+        target_compile_definitions(WorkTest PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    set_target_properties(WorkTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()

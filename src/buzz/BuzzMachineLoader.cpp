@@ -75,12 +75,23 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 	if (!dllPath || !dllPath[0])
 		return false;
 
+	// Set DLL search path to the machine's directory so dependencies can be found
+	{
+		std::string dir(dllPath);
+		auto pos = dir.find_last_of("\\/");
+		if (pos != std::string::npos) {
+			dir = dir.substr(0, pos);
+			SetDllDirectoryA(dir.c_str());
+		}
+	}
+
 	// Load the DLL
 	hDll = LoadLibraryA(dllPath);
 	if (!hDll) {
-		OutputDebugStringA("[BuzzVst] Failed to load DLL: ");
-		OutputDebugStringA(dllPath);
-		OutputDebugStringA("\n");
+		char dbg[512];
+		snprintf(dbg, sizeof(dbg), "[BuzzVst] LoadLibraryA failed (error %lu): %s\n",
+			GetLastError(), dllPath);
+		OutputDebugStringA(dbg);
 		return false;
 	}
 

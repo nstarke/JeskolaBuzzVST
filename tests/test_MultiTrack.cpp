@@ -104,7 +104,7 @@ TEST(MultiTrack, TrackParamLayoutMultipleTracks) {
 	BuzzParamLayout layout;
 	layout.Build(&info);
 
-	ASSERT_EQ(layout.GetTrackStructSize(), 3); // note(2) + byte(1)
+	ASSERT_EQ(layout.GetTrackStructSize(), 2); // note(1) + byte(1)
 
 	// Allocate buffer for 4 tracks
 	int numTracks = 4;

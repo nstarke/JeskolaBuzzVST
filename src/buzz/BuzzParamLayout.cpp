@@ -6,7 +6,7 @@ namespace BuzzVst {
 int BuzzParamLayout::GetParamByteSize(CMPType type)
 {
 	switch (type) {
-		case pt_note:   return 2; // word
+		case pt_note:   return 1; // byte (note value 0-240 fits in one byte)
 		case pt_switch: return 1; // byte
 		case pt_byte:   return 1;
 		case pt_word:   return 2;

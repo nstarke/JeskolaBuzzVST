@@ -7,6 +7,7 @@
 // then enters a command loop processing requests from the 64-bit plugin.
 
 #include <windows.h>
+#include <cfloat>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -68,6 +69,27 @@ static void HandleInitMachine() {
 				g_numTracks);
 			OutputDebugStringA(dbg);
 		}
+
+		// Write defaults to parameter buffers AFTER Init+SetNumTracks.
+		// The real Buzz host does this — machines depend on having valid
+		// default parameter values in GlobalVals/TrackVals.
+		{
+			auto* layout = g_loader.GetParamLayout();
+			if (layout) {
+				layout->WriteAllDefaults(machine->GlobalVals);
+
+				auto& tSlots = layout->GetTrackSlots();
+				if (machine->TrackVals && !tSlots.empty()) {
+					for (int t = 0; t < g_numTracks; t++) {
+						for (int i = 0; i < (int)tSlots.size(); i++) {
+							layout->WriteTrackParam(machine->TrackVals, t, i, tSlots[i].param->DefValue);
+						}
+					}
+				}
+			}
+			OutputDebugStringA("[BuzzBridgeHost32] Parameter defaults written\n");
+		}
+
 		g_pipe.SendResponse(kRespOk);
 	} else {
 		g_pipe.SendResponse(kRespError);
@@ -112,21 +134,25 @@ static void HandleTick(uint32_t payloadSize) {
 	int numTrackParams = (int)tSlots.size();
 	int numTracks = g_numTracks;
 
-	// On first tick, let the machine use its constructor defaults entirely.
-	// Don't write any params — just call Tick() with the machine's own state.
+	// On the first tick after init, let the machine use its constructor defaults.
+	// Writing params (even "default" values from CMachineInfo) overwrites the
+	// machine's internal state and kills audio on many machines.
 	if (g_firstTick) {
-		OutputDebugStringA("[BuzzBridgeHost32] First tick: using constructor defaults\n");
-		// Still need to consume the param data from the pipe (already read above)
+		OutputDebugStringA("[BuzzBridgeHost32] First tick: skipping param writes\n");
 		goto do_tick;
 	}
 
-	// On subsequent ticks, reset to NoValue first (standard Buzz convention).
-	if (machine->GlobalVals)
-		layout->WriteAllNoValues(machine->GlobalVals);
-	if (machine->TrackVals && numTrackParams > 0)
-		layout->WriteTrackAllNoValues(machine->TrackVals, numTracks);
+	// Reset all params to NoValue before applying changes (standard Buzz convention).
+	// NoValue means "no change" — the machine keeps its previous internal state.
+	// Skip on first tick since we just wrote proper defaults in HandleInitMachine.
+	if (!g_firstTick) {
+		if (machine->GlobalVals)
+			layout->WriteAllNoValues(machine->GlobalVals);
+		if (machine->TrackVals && numTrackParams > 0)
+			layout->WriteTrackAllNoValues(machine->TrackVals, numTracks);
+	}
 
-	// Apply changed params
+	// Apply changed params.
 	{
 		static int tickLog = 0;
 		for (auto& p : params) {
@@ -620,6 +646,70 @@ static void CommandLoop() {
 
 int main(int argc, char* argv[])
 {
+	{
+		unsigned int fpuCw = _controlfp(0, 0);
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] FPU control word: 0x%08X\n", fpuCw);
+		OutputDebugStringA(dbg);
+	}
+
+	// Standalone test mode: BuzzBridgeHost32.exe --test <dll_path>
+	if (argc >= 3 && strcmp(argv[1], "--test") == 0) {
+		printf("FPU: 0x%08X\n", _controlfp(0, 0));
+		printf("Testing: %s\n", argv[2]);
+
+		BuzzMachineLoader loader;
+		if (!loader.Load(argv[2])) {
+			printf("Load FAILED\n");
+			return 1;
+		}
+		loader.UpdateMasterInfo(125.0, 44100.0);
+		if (!loader.InitMachine()) {
+			printf("InitMachine FAILED\n");
+			return 1;
+		}
+		auto* m = loader.GetMachine();
+		auto* l = loader.GetParamLayout();
+
+		// Write defaults (like the bridge host does)
+		l->WriteAllDefaults(m->GlobalVals);
+		auto& ts = l->GetTrackSlots();
+		if (m->TrackVals && !ts.empty()) {
+			int nTracks = (loader.GetInfo()->minTracks > 0) ? loader.GetInfo()->minTracks : 1;
+			for (int t = 0; t < nTracks; t++) {
+				for (int i = 0; i < (int)ts.size(); i++) {
+					l->WriteTrackParam(m->TrackVals, t, i, ts[i].param->DefValue);
+				}
+			}
+		}
+
+		SEH_Call([&]() { m->Tick(); });
+
+		// Second tick: write a note trigger
+		for (int i = 0; i < (int)ts.size(); i++) {
+			if (ts[i].param->Type == pt_note) {
+				l->WriteTrackParam(m->TrackVals, 0, i, 0x51); // C-5
+				if (i + 1 < (int)ts.size())
+					l->WriteTrackParam(m->TrackVals, 0, i + 1, ts[i+1].param->MaxValue);
+				break;
+			}
+		}
+		SEH_Call([&]() { m->Tick(); });
+
+		float buf[256] = {};
+		bool out = false;
+		SEH_Call([&]() { out = m->Work(buf, 256, WM_WRITE); });
+
+		float mx = 0;
+		for (int i = 0; i < 256; i++) {
+			float a = buf[i] < 0 ? -buf[i] : buf[i];
+			if (a > mx) mx = a;
+		}
+		printf("hasOutput=%d max=%f buf[0]=%f\n", (int)out, mx, buf[0]);
+		printf(mx > 0 ? "*** AUDIO OK ***\n" : "*** NO AUDIO ***\n");
+		return 0;
+	}
+
 	OutputDebugStringA("[BuzzBridgeHost32] Starting...\n");
 
 	if (argc < 2) {
