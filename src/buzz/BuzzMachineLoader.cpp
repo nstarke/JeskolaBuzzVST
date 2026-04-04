@@ -174,7 +174,14 @@ bool BuzzMachineLoader::InitMachine()
 
 	OutputDebugStringA("[BuzzBridgeHost32] InitMachine: calling Init...\n");
 
-	// Initialize the machine with SEH protection
+	// Initialize the machine with SEH protection.
+	// For MDK machines (like Fuzzpilz Pottwal), Init (vtable[1]) is overridden by
+	// CMDKMachineInterface::Init (FUN_10003d30) which:
+	//   1. Calls pCB->GetNearestWaveLevel(-1,-1) to get an MDK object
+	//   2. Stores MDK at machine+0x18 and wires up the ex interface
+	//   3. Calls MDK->vtable[8](-1) which triggers the machine's MDKInit
+	// Our MDK stub's vtable[8] (StubMDKSetup) calls machine->vtable[23] to
+	// invoke the machine's actual MDKInit, which sets up buffers and FFT.
 	ok = SEH_Call([&]() {
 		pMachine->Init(nullptr);
 	});
@@ -187,6 +194,16 @@ bool BuzzMachineLoader::InitMachine()
 	}
 
 	OutputDebugStringA("[BuzzBridgeHost32] Init() OK\n");
+
+	// Check if MDK was detected during Init (via GetNearestWaveLevel(-1,-1))
+	// and if MDKInit was actually called (via our vtable[10] tracking).
+	if (callbacks.isMDKMachine && callbacks.mdkStub) {
+		if (WasMDKInitCalled(callbacks.mdkStub)) {
+			OutputDebugStringA("[BuzzBridgeHost32] MDK confirmed: MDKInit was called during Init\n");
+		} else {
+			OutputDebugStringA("[BuzzBridgeHost32] MDK stub created but MDKInit was NOT called\n");
+		}
+	}
 
 	// Notify machine about attributes (must be after Init)
 	if (pInfo->numAttributes > 0) {

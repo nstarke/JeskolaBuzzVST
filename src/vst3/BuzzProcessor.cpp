@@ -1172,6 +1172,7 @@ void BuzzProcessor::sendMachineLoadedToController()
 	msg->getAttributes()->setInt("MaxTracks", machineMaxTracks);
 	msg->getAttributes()->setInt("NumGlobal", (int)currentGlobalValues.size());
 	msg->getAttributes()->setInt("NumTrackParams", numTrackParams);
+	msg->getAttributes()->setInt("SampleRate", (int)processSetup.sampleRate);
 
 	// Encode parameter info blob
 	std::vector<char> paramBlob;
