@@ -730,6 +730,21 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	bridgeMachineName = bmi.name;
 
 	if (!acceptsMachineType(bmi.type)) {
+		char dbg[128];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] loadBuzzMachine: machine type %d not accepted\n", bmi.type);
+		OutputDebugStringA(dbg);
+
+		// Send typed error to controller
+		if (auto msg = owned(allocateMessage())) {
+			msg->setMessageID("BuzzMachineLoadFailed");
+			msg->getAttributes()->setBinary("Path", path.c_str(), (Steinberg::uint32)path.size());
+			const char* reason = (bmi.type == MT_EFFECT)
+				? "This is an Effect machine. Load it in the BuzzBridge Effect plugin."
+				: "This is a Generator machine. Load it in the BuzzBridge Generator plugin.";
+			msg->getAttributes()->setBinary("Reason", reason, (Steinberg::uint32)strlen(reason));
+			sendMessage(msg);
+		}
+
 		bridge.Unload();
 		return false;
 	}

@@ -703,7 +703,14 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 	if (strcmp(message->getMessageID(), "BuzzMachineLoadFailed") == 0) {
 		OutputDebugStringA("[BuzzBridge] Controller: received load failure from processor\n");
 		if (activeView) {
-			activeView->setMachineName("Load failed - check debug output");
+			// Try to get a reason string
+			std::string reason = "Load failed";
+			const void* reasonData = nullptr;
+			Steinberg::uint32 reasonSize = 0;
+			if (message->getAttributes()->getBinary("Reason", reasonData, reasonSize) == kResultOk && reasonSize > 0) {
+				reason = std::string((const char*)reasonData, reasonSize);
+			}
+			activeView->setMachineName(reason);
 		}
 		return kResultOk;
 	}
