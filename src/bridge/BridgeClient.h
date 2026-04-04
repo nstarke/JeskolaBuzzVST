@@ -47,7 +47,10 @@ private:
 	BridgePipe pipe;
 	BridgeSharedMem sharedMem;
 	HANDLE hProcess = nullptr;
+	HANDLE hWorkReady = nullptr;  // Event: client signals "work params ready"
+	HANDLE hWorkDone = nullptr;   // Event: host signals "work complete"
 	bool processRunning = false;
+	bool fastWorkEnabled = false;
 };
 
 } // namespace BuzzVst

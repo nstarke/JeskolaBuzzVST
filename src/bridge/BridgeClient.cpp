@@ -123,6 +123,18 @@ bool BridgeClient::Start(const std::string& hostExePath)
 		return false;
 	}
 
+	// Create events for fast Work path (shared memory signaling, no pipe)
+	std::string workReadyName = "Local\\BuzzBridgeWorkReady_" + sessionId;
+	std::string workDoneName = "Local\\BuzzBridgeWorkDone_" + sessionId;
+	hWorkReady = OpenEventA(EVENT_ALL_ACCESS, FALSE, workReadyName.c_str());
+	hWorkDone = OpenEventA(EVENT_ALL_ACCESS, FALSE, workDoneName.c_str());
+	fastWorkEnabled = (hWorkReady != nullptr && hWorkDone != nullptr);
+	if (fastWorkEnabled) {
+		OutputDebugStringA("[BuzzBridge64] Fast Work path enabled (event signaling)\n");
+	} else {
+		OutputDebugStringA("[BuzzBridge64] Fast Work path unavailable, using pipe fallback\n");
+	}
+
 	// Verify connection with a ping
 	if (!Ping()) {
 		OutputDebugStringA("[BuzzBridge64] Ping failed\n");
@@ -144,6 +156,9 @@ void BridgeClient::Stop()
 
 	pipe.Close();
 	sharedMem.Close();
+	if (hWorkReady) { CloseHandle(hWorkReady); hWorkReady = nullptr; }
+	if (hWorkDone) { CloseHandle(hWorkDone); hWorkDone = nullptr; }
+	fastWorkEnabled = false;
 
 	if (hProcess) {
 		// Wait briefly for graceful exit
@@ -204,6 +219,23 @@ bool BridgeClient::Tick(const std::vector<BridgeTickParam>& params)
 
 bool BridgeClient::Work(int numSamples, int workMode)
 {
+	if (fastWorkEnabled) {
+		// Fast path: write params to shared memory, signal event, wait for completion
+		auto* audio = sharedMem.GetAudio();
+		if (!audio) return false;
+
+		audio->numSamples = numSamples;
+		audio->workMode = workMode;
+		audio->hasOutput = 0;
+
+		// Signal host to process, wait for completion
+		MemoryBarrier();
+		SetEvent(hWorkReady);
+		DWORD result = WaitForSingleObject(hWorkDone, 5000);
+		return (result == WAIT_OBJECT_0);
+	}
+
+	// Pipe fallback
 	BridgeWorkCmd wcmd = {};
 	wcmd.numSamples = numSamples;
 	wcmd.workMode = workMode;

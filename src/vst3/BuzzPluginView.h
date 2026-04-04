@@ -40,6 +40,8 @@ public:
 	std::function<void(int slotIndex, const std::string& wavPath)> onSampleSlotChanged;
 	std::function<void(int delta)> onTrackCountChanged; // delta: +1 or -1
 	std::function<void()> onCheckScanResults; // controller polls scan results
+	std::function<void()> onDeferredParamUpdate; // called on UI thread after machine load
+	std::function<bool()> onPollMachineLoad;    // returns true when load complete
 	std::function<void(Steinberg::Vst::ParamID id)> onParamBeginEdit;
 	std::function<void(Steinberg::Vst::ParamID id, double value)> onParamChanged;
 	std::function<void(Steinberg::Vst::ParamID id)> onParamEndEdit;
@@ -160,6 +162,7 @@ public:
 	int maxTracks = 0;
 	static const UINT WM_SCAN_COMPLETE = WM_USER + 100;
 	static const UINT WM_BG_SCAN_COMPLETE = WM_USER + 101;
+	static const UINT WM_DEFERRED_PARAM_UPDATE = WM_USER + 102;
 
 	HWND getContainerHWND() const { return hwndContainer; }
 	void destroyFonts();

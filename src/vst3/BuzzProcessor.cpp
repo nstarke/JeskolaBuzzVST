@@ -93,12 +93,34 @@ tresult PLUGIN_API BuzzProcessor::canProcessSampleSize(int32 symbolicSampleSize)
 
 tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 {
+#ifdef BUZZVST_64BIT
+	// Handle deferred machine load (from notify on UI thread)
+	// Must happen on the audio thread since the bridge pipe isn't thread-safe.
+	if (hasPendingLoad) {
+		hasPendingLoad = false;
+		dllPath = pendingDllPath;
+		pendingDllPath.clear();
+		OutputDebugStringA("[BuzzBridge] Processor: executing deferred machine load\n");
+		if (loadBuzzMachine(dllPath)) {
+			OutputDebugStringA("[BuzzBridge] Processor: deferred load OK\n");
+			// Cannot call sendMessage from audio thread (deadlocks).
+			// Set flag for output parameter to signal the controller.
+			pendingMachineLoaded = true;
+		} else {
+			OutputDebugStringA("[BuzzBridge] Processor: deferred load FAILED\n");
+		}
+	}
+#endif
+
 	// Process parameter changes
 	if (data.inputParameterChanges) {
 		processParameterChanges(data.inputParameterChanges);
 	}
 
-	// Sanity check numSamples
+	// Sanity check numSamples.  This is the VST3 process buffer limit,
+	// not the bridge limit (kBridgeMaxSamples).  65536 is generous but
+	// intentional: the host controls this value and some hosts use large
+	// buffer sizes.
 	if (data.numSamples <= 0 || data.numSamples > 65536)
 		return kResultOk;
 
@@ -284,6 +306,9 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	}
 
 	data.outputs[0].silenceFlags = 0;
+
+	// NOTE: Never call sendMessage() from process() — it deadlocks on some hosts.
+
 	return kResultOk;
 }
 
@@ -645,14 +670,20 @@ void BuzzProcessor::updateMasterInfo(ProcessContext* ctx)
 		bpm = ctx->tempo;
 	}
 
-	// Buzz ticks-per-beat is a pattern resolution concept (typically 4),
-	// not a time signature value. VST3 doesn't have a direct equivalent.
-	// We use a fixed default of 4, which matches what most Buzz machines expect.
-	// The time signature denominator (e.g. 4 in 4/4) is unrelated.
 	int tpb = 4;
+	int ibpm = (int)bpm;
+	int isr = (int)processSetup.sampleRate;
+
+	// Only send when values actually change (avoid IPC overhead on every block)
+	if (ibpm == lastSentBpm && isr == lastSentSampleRate && tpb == lastSentTpb)
+		return;
+
+	lastSentBpm = ibpm;
+	lastSentSampleRate = isr;
+	lastSentTpb = tpb;
 
 #ifdef BUZZVST_64BIT
-	bridge.SetMasterInfo((int)bpm, (int)processSetup.sampleRate, tpb);
+	bridge.SetMasterInfo(ibpm, isr, tpb);
 #else
 	loader.UpdateMasterInfo(bpm, processSetup.sampleRate, tpb);
 #endif
@@ -706,15 +737,22 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	machineReady = false;
 	if (path.empty()) return false;
 
-	if (!ensureBridgeRunning()) return false;
+	if (!ensureBridgeRunning()) {
+		OutputDebugStringA("[BuzzBridge] loadBuzzMachine: ensureBridgeRunning failed\n");
+		return false;
+	}
 
 	bridge.Unload();
 
-	if (!bridge.LoadDll(path)) return false;
+	if (!bridge.LoadDll(path)) {
+		OutputDebugStringA("[BuzzBridge] loadBuzzMachine: LoadDll failed\n");
+		return false;
+	}
 
 	bridge.SetMasterInfo(125, (int)processSetup.sampleRate, 4);
 
 	if (!bridge.InitMachine()) {
+		OutputDebugStringA("[BuzzBridge] loadBuzzMachine: InitMachine failed\n");
 		bridge.Unload();
 		return false;
 	}
@@ -723,6 +761,7 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	BridgeMachineInfo bmi = {};
 	std::vector<BridgeParamInfo> paramInfos;
 	if (!bridge.GetMachineInfo(bmi, paramInfos)) {
+		OutputDebugStringA("[BuzzBridge] loadBuzzMachine: GetMachineInfo failed\n");
 		bridge.Unload();
 		return false;
 	}
@@ -930,7 +969,7 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 	char pathBuf[1024] = {0};
 	Steinberg::int32 pathLen = 0;
 	if (!streamer.readInt32(pathLen)) return kResultFalse;
-	if (pathLen < 0 || pathLen >= 1024) pathLen = 0; // reject invalid lengths
+	if (pathLen < 0 || pathLen >= 1024) return kResultFalse;
 	if (pathLen > 0) {
 		if (streamer.readRaw(pathBuf, pathLen) != pathLen) return kResultFalse;
 		pathBuf[pathLen] = 0;
@@ -965,9 +1004,9 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 	if (streamer.readInt32(savedNumTracks) && streamer.readInt32(savedNumTrackParams)) {
 		// Validate both counts against hard limits
 		if (savedNumTracks < 0) savedNumTracks = 0;
-		if (savedNumTracks > kMaxTracks) savedNumTracks = 0; // reject, don't clamp
+		if (savedNumTracks > kMaxTracks) return kResultFalse;
 		if (savedNumTrackParams < 0) savedNumTrackParams = 0;
-		if (savedNumTrackParams > kMaxTrackParams) savedNumTrackParams = 0;
+		if (savedNumTrackParams > kMaxTrackParams) return kResultFalse;
 
 		if (savedNumTracks > 0 && savedNumTrackParams > 0) {
 			savedTrackValues.resize(savedNumTracks);
@@ -1301,13 +1340,17 @@ tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 				OutputDebugStringA(dbg);
 			}
 			if (newPath != dllPath || !machineReady) {
+#ifdef BUZZVST_64BIT
+				// Defer to audio thread to avoid race conditions with process()
+				// (both use the same bridge pipe, which is not thread-safe)
+				pendingDllPath = newPath;
+				hasPendingLoad = true;
+				machineReady = false;
+				OutputDebugStringA("[BuzzBridge] Processor: deferred machine load\n");
+#else
 				dllPath = newPath;
 				if (machineReady) {
-#ifdef BUZZVST_64BIT
-					bridge.Unload();
-#else
 					loader.Unload();
-#endif
 					machineReady = false;
 				}
 				OutputDebugStringA("[BuzzBridge] Processor: loading machine...\n");
@@ -1316,7 +1359,6 @@ tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 					sendMachineLoadedToController();
 				} else {
 					OutputDebugStringA("[BuzzBridge] Processor: loadBuzzMachine FAILED\n");
-					// Notify controller that load failed
 					if (auto msg = owned(allocateMessage())) {
 						msg->setMessageID("BuzzMachineLoadFailed");
 						msg->getAttributes()->setBinary("Path",
@@ -1324,7 +1366,18 @@ tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 						sendMessage(msg);
 					}
 				}
+#endif
 			}
+		}
+		return kResultOk;
+	}
+
+	// Poll from controller: if deferred load completed, send machine info back
+	if (strcmp(message->getMessageID(), "BuzzPollMachineStatus") == 0) {
+		if (pendingMachineLoaded && machineReady) {
+			pendingMachineLoaded = false;
+			OutputDebugStringA("[BuzzBridge] Processor: poll triggered, sending BuzzMachineLoaded\n");
+			sendMachineLoadedToController();
 		}
 		return kResultOk;
 	}

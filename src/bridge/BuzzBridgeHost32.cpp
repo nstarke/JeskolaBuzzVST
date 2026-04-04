@@ -28,9 +28,12 @@ static std::string g_sessionId;
 static bool g_running = true;
 static int g_numTracks = 1;
 static bool g_firstTick = true;
+static HANDLE g_hWorkReady = nullptr;  // Event: client signals "work ready"
+static HANDLE g_hWorkDone = nullptr;   // Event: host signals "work done"
 
 // Read a null-terminated string from the pipe
 static bool ReadString(BridgePipe& pipe, uint32_t size, std::string& out) {
+	if (size > 65536) return false;
 	std::vector<char> buf(size + 1, 0);
 	if (!pipe.ReadAll(buf.data(), size)) return false;
 	buf[size] = 0;
@@ -46,16 +49,55 @@ static void HandleLoadDll(uint32_t payloadSize) {
 	}
 
 	if (g_loader.Load(path.c_str())) {
+		char dbg[512];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] LoadDll OK: %s\n", path.c_str());
+		OutputDebugStringA(dbg);
 		g_pipe.SendResponse(kRespOk);
 	} else {
+		char dbg[512];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] LoadDll FAILED: %s (error %lu)\n",
+			path.c_str(), GetLastError());
+		OutputDebugStringA(dbg);
 		g_pipe.SendResponse(kRespError);
 	}
 }
 
 static void HandleInitMachine() {
+	OutputDebugStringA("[BuzzBridgeHost32] HandleInitMachine entered\n");
 	g_loader.UpdateMasterInfo(125.0, 44100.0);
 
-	if (g_loader.InitMachine()) {
+	{
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] About to call InitMachine: IsLoaded=%d IsFaulted=%d Info=%p\n",
+			(int)g_loader.IsLoaded(), (int)g_loader.IsFaulted(),
+			(void*)g_loader.GetInfo());
+		OutputDebugStringA(dbg);
+	}
+
+	// Direct inline test: log before and after each step to find the failure
+	OutputDebugStringA("[BuzzBridgeHost32] Step 1: checking preconditions\n");
+	{
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] hDll=%p pInfo=%p\n",
+			(void*)g_loader.GetInfo(), (void*)g_loader.GetInfo());
+		OutputDebugStringA(dbg);
+	}
+
+	bool initOk = false;
+	__try {
+		OutputDebugStringA("[BuzzBridgeHost32] Step 2: calling g_loader.InitMachine()\n");
+		initOk = g_loader.InitMachine();
+		char dbg[64];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Step 3: InitMachine returned %d\n", (int)initOk);
+		OutputDebugStringA(dbg);
+	} __except(EXCEPTION_EXECUTE_HANDLER) {
+		char dbg[128];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] InitMachine CRASHED with exception 0x%08lX\n",
+			GetExceptionCode());
+		OutputDebugStringA(dbg);
+	}
+
+	if (initOk) {
 		auto* info = g_loader.GetInfo();
 		auto* machine = g_loader.GetMachine();
 		g_numTracks = (info && info->minTracks > 0) ? info->minTracks : 1;
@@ -71,9 +113,8 @@ static void HandleInitMachine() {
 		}
 
 		// Write defaults to parameter buffers AFTER Init+SetNumTracks.
-		// The real Buzz host does this — machines depend on having valid
-		// default parameter values in GlobalVals/TrackVals.
-		{
+		// Skip if machine is faulted (SetNumTracks crashed).
+		if (!g_loader.IsFaulted()) {
 			auto* layout = g_loader.GetParamLayout();
 			if (layout) {
 				layout->WriteAllDefaults(machine->GlobalVals);
@@ -88,10 +129,13 @@ static void HandleInitMachine() {
 				}
 			}
 			OutputDebugStringA("[BuzzBridgeHost32] Parameter defaults written\n");
+		} else {
+			OutputDebugStringA("[BuzzBridgeHost32] Skipping defaults (machine faulted)\n");
 		}
 
 		g_pipe.SendResponse(kRespOk);
 	} else {
+		OutputDebugStringA("[BuzzBridgeHost32] InitMachine FAILED\n");
 		g_pipe.SendResponse(kRespError);
 	}
 }
@@ -124,7 +168,7 @@ static void HandleTick(uint32_t payloadSize) {
 
 	auto* machine = g_loader.GetMachine();
 	auto* layout = g_loader.GetParamLayout();
-	if (!machine || !layout) {
+	if (!machine || !layout || g_loader.IsFaulted()) {
 		g_pipe.SendResponse(kRespError);
 		return;
 	}
@@ -267,39 +311,21 @@ do_tick:
 	g_pipe.SendResponse(ok ? kRespOk : kRespError);
 }
 
-static void HandleWork() {
-	BridgeWorkCmd wcmd;
-	if (!g_pipe.ReadAll(&wcmd, sizeof(wcmd))) {
-		g_pipe.SendResponse(kRespError);
-		return;
-	}
-
+// Process Work using params already in shared memory (fast path)
+static void DoWork(int numSamples, int workMode) {
 	auto* machine = g_loader.GetMachine();
 	auto* info = g_loader.GetInfo();
-	if (!machine || !info) {
-		g_pipe.SendResponse(kRespError);
-		return;
-	}
+	if (!machine || !info || g_loader.IsFaulted()) return;
 
 	auto* audio = g_sharedMem.GetAudio();
-	if (!audio) {
-		g_pipe.SendResponse(kRespError);
-		return;
-	}
+	if (!audio) return;
 
-	int numSamples = wcmd.numSamples;
-	if (numSamples <= 0 || numSamples > kBridgeMaxSamples) {
-		g_pipe.SendResponse(kRespError);
-		return;
-	}
+	if (numSamples <= 0 || numSamples > kBridgeMaxSamples) return;
 
-	int workMode = wcmd.workMode;
 	bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
 	bool hasOutput = false;
-
 	auto* mi = g_loader.GetMasterInfo();
 
-	// Process in MAX_BUFFER_LENGTH chunks (Buzz limit)
 	int offset = 0;
 	while (offset < numSamples) {
 		int blockSize = numSamples - offset;
@@ -308,19 +334,16 @@ static void HandleWork() {
 		if (monoToStereo) {
 			float inBuf[MAX_BUFFER_LENGTH];
 			float outBuf[MAX_BUFFER_LENGTH];
-
 			if (workMode & WM_READ) {
 				memcpy(inBuf, audio->inputLeft + offset, blockSize * sizeof(float));
 			} else {
 				memset(inBuf, 0, blockSize * sizeof(float));
 			}
 			memset(outBuf, 0, blockSize * sizeof(float));
-
 			bool blockOut = false;
 			SEH_Call([&]() {
 				blockOut = machine->WorkMonoToStereo(inBuf, outBuf, blockSize, workMode);
 			});
-
 			if (blockOut) {
 				memcpy(audio->outputLeft + offset, inBuf, blockSize * sizeof(float));
 				memcpy(audio->outputRight + offset, outBuf, blockSize * sizeof(float));
@@ -331,55 +354,17 @@ static void HandleWork() {
 			}
 		} else {
 			float workBuf[MAX_BUFFER_LENGTH];
-
 			if (workMode & WM_READ) {
 				memcpy(workBuf, audio->inputLeft + offset, blockSize * sizeof(float));
 			} else {
 				memset(workBuf, 0, blockSize * sizeof(float));
 			}
-
-			// Canary: put a known value so we can tell if Work touched the buffer
-			float canary = workBuf[0];
-			workBuf[0] = 12345.0f;
-
 			bool blockOut = false;
 			SEH_Call([&]() {
 				blockOut = machine->Work(workBuf, blockSize, workMode);
 			});
-
-			{
-				static int canaryLog = 0;
-				if (canaryLog < 5 && blockOut) {
-					char dbg[256];
-					snprintf(dbg, sizeof(dbg),
-						"[BuzzBridgeHost32] Work canary: before=12345 after=%f blockOut=%d\n",
-						workBuf[0], (int)blockOut);
-					OutputDebugStringA(dbg);
-					canaryLog++;
-				}
-			}
-
-			// Restore canary if machine didn't touch it
-			if (workBuf[0] == 12345.0f) workBuf[0] = canary;
-
+			if (workBuf[0] == 12345.0f) workBuf[0] = 0; // restore canary
 			if (blockOut) {
-				{
-					// Log when we first see non-zero audio
-					float maxVal = 0;
-					for (int s = 0; s < blockSize; s++) {
-						float a = workBuf[s] < 0 ? -workBuf[s] : workBuf[s];
-						if (a > maxVal) maxVal = a;
-					}
-					static bool loggedNonZero = false;
-					if (maxVal > 0 && !loggedNonZero) {
-						char dbg[256];
-						snprintf(dbg, sizeof(dbg),
-							"[BuzzBridgeHost32] FIRST NON-ZERO audio: buf[0]=%f max=%f blockSize=%d\n",
-							workBuf[0], maxVal, blockSize);
-						OutputDebugStringA(dbg);
-						loggedNonZero = true;
-					}
-				}
 				memcpy(audio->outputLeft + offset, workBuf, blockSize * sizeof(float));
 				memcpy(audio->outputRight + offset, workBuf, blockSize * sizeof(float));
 				hasOutput = true;
@@ -388,26 +373,34 @@ static void HandleWork() {
 				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
 			}
 		}
-
 		offset += blockSize;
 		if (mi) mi->PosInTick += blockSize;
 	}
-
 	audio->hasOutput = hasOutput ? 1 : 0;
+}
 
-	{
-		static int workLog = 0;
-		if (workLog < 5 && hasOutput) {
-			char dbg[256];
-			snprintf(dbg, sizeof(dbg),
-				"[BuzzBridgeHost32] Work: hasOutput=%d m2s=%d samples=%d L[0]=%f R[0]=%f\n",
-				(int)hasOutput, (int)monoToStereo, numSamples,
-				audio->outputLeft[0], audio->outputRight[0]);
-			OutputDebugStringA(dbg);
-			workLog++;
+// Fast Work thread: waits on event, processes Work via shared memory
+static DWORD WINAPI FastWorkThread(LPVOID) {
+	while (g_running) {
+		DWORD result = WaitForSingleObject(g_hWorkReady, 100);
+		if (result == WAIT_OBJECT_0) {
+			auto* audio = g_sharedMem.GetAudio();
+			if (audio) {
+				DoWork(audio->numSamples, audio->workMode);
+			}
+			SetEvent(g_hWorkDone);
 		}
 	}
+	return 0;
+}
 
+static void HandleWork() {
+	BridgeWorkCmd wcmd;
+	if (!g_pipe.ReadAll(&wcmd, sizeof(wcmd))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+	DoWork(wcmd.numSamples, wcmd.workMode);
 	g_pipe.SendResponse(kRespOk);
 }
 
@@ -519,9 +512,18 @@ static void HandleGetInfo() {
 	bmi.numTrackParams = (int32_t)tSlots.size();
 	bmi.minTracks = info->minTracks;
 	bmi.maxTracks = info->maxTracks;
-	if (info->Name) strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
-	if (info->ShortName) strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
-	if (info->Author) strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+	if (info->Name) {
+		strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
+		bmi.name[sizeof(bmi.name) - 1] = '\0';
+	}
+	if (info->ShortName) {
+		strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
+		bmi.shortName[sizeof(bmi.shortName) - 1] = '\0';
+	}
+	if (info->Author) {
+		strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+		bmi.author[sizeof(bmi.author) - 1] = '\0';
+	}
 
 	// Build param info array
 	int totalParams = bmi.numGlobalParams + bmi.numTrackParams;
@@ -536,8 +538,14 @@ static void HandleGetInfo() {
 		pi.noValue = bp->NoValue;
 		pi.defValue = bp->DefValue;
 		pi.flags = bp->Flags;
-		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
-		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+		if (bp->Name) {
+			strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+			pi.name[sizeof(pi.name) - 1] = '\0';
+		}
+		if (bp->Description) {
+			strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+			pi.description[sizeof(pi.description) - 1] = '\0';
+		}
 	}
 
 	for (int i = 0; i < bmi.numTrackParams; i++) {
@@ -549,8 +557,14 @@ static void HandleGetInfo() {
 		pi.noValue = bp->NoValue;
 		pi.defValue = bp->DefValue;
 		pi.flags = bp->Flags;
-		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
-		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+		if (bp->Name) {
+			strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+			pi.name[sizeof(pi.name) - 1] = '\0';
+		}
+		if (bp->Description) {
+			strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+			pi.description[sizeof(pi.description) - 1] = '\0';
+		}
 	}
 
 	uint32_t payloadSize = sizeof(bmi) + totalParams * sizeof(BridgeParamInfo);
@@ -579,6 +593,14 @@ static void CommandLoop() {
 		if (!g_pipe.ReadCommand(cmd)) {
 			// Pipe broken - exit
 			break;
+		}
+
+		// Only log non-hot-path commands (skip Tick/Work/SetMasterInfo)
+		if (cmd.cmd != kCmdTick && cmd.cmd != kCmdWork && cmd.cmd != kCmdSetMasterInfo) {
+			char dbg[128];
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Cmd: %u payload: %u\n",
+				(unsigned)cmd.cmd, (unsigned)cmd.payloadSize);
+			OutputDebugStringA(dbg);
 		}
 
 		switch (cmd.cmd) {
@@ -659,15 +681,25 @@ int main(int argc, char* argv[])
 		printf("Testing: %s\n", argv[2]);
 
 		BuzzMachineLoader loader;
+		printf("Loading DLL...\n");
 		if (!loader.Load(argv[2])) {
-			printf("Load FAILED\n");
+			printf("Load FAILED (error %lu)\n", GetLastError());
 			return 1;
 		}
+		auto* info = loader.GetInfo();
+		printf("Load OK: '%s' type=%d gParams=%d tParams=%d minTracks=%d maxTracks=%d attrs=%d\n",
+			info->Name ? info->Name : "(null)",
+			info->Type, info->numGlobalParameters, info->numTrackParameters,
+			info->minTracks, info->maxTracks, info->numAttributes);
+
 		loader.UpdateMasterInfo(125.0, 44100.0);
+		printf("Calling InitMachine...\n");
 		if (!loader.InitMachine()) {
-			printf("InitMachine FAILED\n");
+			printf("InitMachine FAILED (IsFaulted=%d)\n", (int)loader.IsFaulted());
 			return 1;
 		}
+		printf("InitMachine OK\n");
+		printf("MachineInterfaceEx: %p\n", (void*)loader.GetMachineEx());
 		auto* m = loader.GetMachine();
 		auto* l = loader.GetParamLayout();
 
@@ -756,6 +788,12 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	// Create events for fast Work path
+	std::string workReadyName = "Local\\BuzzBridgeWorkReady_" + g_sessionId;
+	std::string workDoneName = "Local\\BuzzBridgeWorkDone_" + g_sessionId;
+	g_hWorkReady = CreateEventA(nullptr, FALSE, FALSE, workReadyName.c_str()); // auto-reset
+	g_hWorkDone = CreateEventA(nullptr, FALSE, FALSE, workDoneName.c_str());   // auto-reset
+
 	OutputDebugStringA("[BuzzBridgeHost32] Shared memory created, waiting for client...\n");
 
 	// Wait for the 64-bit plugin to connect
@@ -770,13 +808,31 @@ int main(int argc, char* argv[])
 
 	OutputDebugStringA("[BuzzBridgeHost32] Client connected, entering command loop\n");
 
+	// Start fast Work thread (event-based, no pipe overhead)
+	HANDLE hFastWorkThread = nullptr;
+	if (g_hWorkReady && g_hWorkDone) {
+		hFastWorkThread = CreateThread(nullptr, 0, FastWorkThread, nullptr, 0, nullptr);
+		if (hFastWorkThread) {
+			OutputDebugStringA("[BuzzBridgeHost32] Fast Work thread started\n");
+		}
+	}
+
 	// Enter command loop
 	CommandLoop();
+
+	// Stop fast Work thread
+	g_running = false;
+	if (hFastWorkThread) {
+		WaitForSingleObject(hFastWorkThread, 2000);
+		CloseHandle(hFastWorkThread);
+	}
 
 	// Cleanup
 	g_loader.Unload();
 	g_pipe.Close();
 	g_sharedMem.Close();
+	if (g_hWorkReady) { CloseHandle(g_hWorkReady); g_hWorkReady = nullptr; }
+	if (g_hWorkDone) { CloseHandle(g_hWorkDone); g_hWorkDone = nullptr; }
 
 	return 0;
 }

@@ -13,6 +13,7 @@ BuzzCallbacks::BuzzCallbacks()
 
 BuzzCallbacks::~BuzzCallbacks()
 {
+	if (mdkStub) { DestroyMDKStub(mdkStub); mdkStub = nullptr; }
 	DeleteCriticalSection(&cs);
 }
 
@@ -28,7 +29,7 @@ CWaveLevel const *BuzzCallbacks::GetWaveLevel(int const i, int const level) {
 void BuzzCallbacks::MessageBox(char const *txt)
 {
 	if (txt) {
-		OutputDebugStringA("[BuzzVst] ");
+		OutputDebugStringA("[BuzzBridgeHost32] ");
 		OutputDebugStringA(txt);
 		OutputDebugStringA("\n");
 	}
@@ -61,6 +62,14 @@ bool BuzzCallbacks::GetEnvPoint(int const wave, int const env, int const i, word
 
 CWaveLevel const *BuzzCallbacks::GetNearestWaveLevel(int const i, int const note)
 {
+	// Special check: GetNearestWaveLevel(-1, -1) returns an MDK interface object.
+	// MDK-based machines (e.g., ld grain) call this during initialization to get
+	// a helper object they use for Init and Work delegation.
+	if (i == -1 && note == -1) {
+		if (!mdkStub) mdkStub = CreateMDKStub();
+		OutputDebugStringA("[BuzzBridgeHost32] GetNearestWaveLevel(-1,-1): returning MDK stub\n");
+		return (CWaveLevel const*)mdkStub;
+	}
 	// Special check: GetNearestWaveLevel(-2, -2) is used to detect host version support
 	if (i == -2 && note == -2) {
 		return (CWaveLevel const*)1;
@@ -163,7 +172,7 @@ void BuzzCallbacks::UpdateParameterDisplays(CMachine *pmac) {}
 void BuzzCallbacks::WriteLine(char const *text)
 {
 	if (text) {
-		OutputDebugStringA("[BuzzVst] ");
+		OutputDebugStringA("[BuzzBridgeHost32] ");
 		OutputDebugStringA(text);
 		OutputDebugStringA("\n");
 	}
