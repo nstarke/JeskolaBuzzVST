@@ -1,0 +1,692 @@
+// BuzzBridgeHost32.exe - 32-bit process that loads Buzz machine DLLs
+// and processes audio on behalf of the 64-bit VST3 plugin.
+//
+// Usage: BuzzBridgeHost32.exe <session-id>
+//
+// Creates a named pipe and shared memory identified by session-id,
+// then enters a command loop processing requests from the 64-bit plugin.
+
+#include <windows.h>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "BridgeIPC.h"
+#include "../buzz/MachineInterface.h"
+#include "../buzz/BuzzMachineLoader.h"
+#include "../buzz/BuzzParamLayout.h"
+#include "../common/SEHGuard.h"
+
+using namespace BuzzVst;
+
+static BuzzMachineLoader g_loader;
+static BridgePipe g_pipe;
+static BridgeSharedMem g_sharedMem;
+static std::string g_sessionId;
+static bool g_running = true;
+static int g_numTracks = 1;
+static bool g_firstTick = true;
+
+// Read a null-terminated string from the pipe
+static bool ReadString(BridgePipe& pipe, uint32_t size, std::string& out) {
+	std::vector<char> buf(size + 1, 0);
+	if (!pipe.ReadAll(buf.data(), size)) return false;
+	buf[size] = 0;
+	out = buf.data();
+	return true;
+}
+
+static void HandleLoadDll(uint32_t payloadSize) {
+	std::string path;
+	if (!ReadString(g_pipe, payloadSize, path)) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	if (g_loader.Load(path.c_str())) {
+		g_pipe.SendResponse(kRespOk);
+	} else {
+		g_pipe.SendResponse(kRespError);
+	}
+}
+
+static void HandleInitMachine() {
+	g_loader.UpdateMasterInfo(125.0, 44100.0);
+
+	if (g_loader.InitMachine()) {
+		auto* info = g_loader.GetInfo();
+		auto* machine = g_loader.GetMachine();
+		g_numTracks = (info && info->minTracks > 0) ? info->minTracks : 1;
+		g_firstTick = true;
+		{
+			char dbg[256];
+			snprintf(dbg, sizeof(dbg),
+				"[BuzzBridgeHost32] InitMachine OK: GlobalVals=%p TrackVals=%p numTracks=%d\n",
+				machine ? machine->GlobalVals : nullptr,
+				machine ? machine->TrackVals : nullptr,
+				g_numTracks);
+			OutputDebugStringA(dbg);
+		}
+		g_pipe.SendResponse(kRespOk);
+	} else {
+		g_pipe.SendResponse(kRespError);
+	}
+}
+
+static void HandleUnload() {
+	g_loader.Unload();
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleSetMasterInfo() {
+	BridgeMasterInfo mi;
+	if (!g_pipe.ReadAll(&mi, sizeof(mi))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+	g_loader.UpdateMasterInfo(mi.beatsPerMin, mi.samplesPerSec, mi.ticksPerBeat);
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleTick(uint32_t payloadSize) {
+	// Read param changes
+	uint32_t numParams = payloadSize / sizeof(BridgeTickParam);
+	std::vector<BridgeTickParam> params(numParams);
+	if (numParams > 0) {
+		if (!g_pipe.ReadAll(params.data(), payloadSize)) {
+			g_pipe.SendResponse(kRespError);
+			return;
+		}
+	}
+
+	auto* machine = g_loader.GetMachine();
+	auto* layout = g_loader.GetParamLayout();
+	if (!machine || !layout) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto& gSlots = layout->GetGlobalSlots();
+	auto& tSlots = layout->GetTrackSlots();
+	int numTrackParams = (int)tSlots.size();
+	int numTracks = g_numTracks;
+
+	// On first tick, let the machine use its constructor defaults entirely.
+	// Don't write any params — just call Tick() with the machine's own state.
+	if (g_firstTick) {
+		OutputDebugStringA("[BuzzBridgeHost32] First tick: using constructor defaults\n");
+		// Still need to consume the param data from the pipe (already read above)
+		goto do_tick;
+	}
+
+	// On subsequent ticks, reset to NoValue first (standard Buzz convention).
+	if (machine->GlobalVals)
+		layout->WriteAllNoValues(machine->GlobalVals);
+	if (machine->TrackVals && numTrackParams > 0)
+		layout->WriteTrackAllNoValues(machine->TrackVals, numTracks);
+
+	// Apply changed params
+	{
+		static int tickLog = 0;
+		for (auto& p : params) {
+			if (p.paramId < 0) break; // sentinel
+			if (tickLog < 10) {
+				char dbg[128];
+				snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Tick param: id=%d value=%d\n",
+					p.paramId, p.value);
+				OutputDebugStringA(dbg);
+			}
+			// Always log note-on events (track param 0 with value != 0 and != 255)
+			if (p.paramId == 1000 && p.value != 0 && p.value != 255) {
+				char dbg[128];
+				snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] NOTE ON tick: paramId=%d buzzNote=%d\n",
+					p.paramId, p.value);
+				OutputDebugStringA(dbg);
+
+				// Dump TrackVals bytes with note
+				if (machine->TrackVals) {
+					int structSize = layout->GetTrackStructSize();
+					unsigned char* tv = (unsigned char*)machine->TrackVals;
+					char hex[256] = {};
+					int pos = 0;
+					for (int b = 0; b < structSize && pos < 200; b++) {
+						pos += snprintf(hex + pos, 256 - pos, "%02X ", tv[b]);
+					}
+					char dbg2[512];
+					snprintf(dbg2, sizeof(dbg2),
+						"[BuzzBridgeHost32] TrackVals after note write: %s\n", hex);
+					OutputDebugStringA(dbg2);
+				}
+			}
+			if (p.paramId < 1000) {
+				// Global param
+				if (p.paramId >= 0 && p.paramId < (int)gSlots.size() && machine->GlobalVals)
+					layout->WriteGlobalParam(machine->GlobalVals, p.paramId, p.value);
+			} else {
+				// Track param: encoded as 1000 + track * numTrackParams + paramIndex
+				int encoded = p.paramId - 1000;
+				int track = (numTrackParams > 0) ? encoded / numTrackParams : 0;
+				int paramIdx = (numTrackParams > 0) ? encoded % numTrackParams : 0;
+				if (track >= 0 && track < numTracks &&
+				    paramIdx >= 0 && paramIdx < numTrackParams && machine->TrackVals) {
+					layout->WriteTrackParam(machine->TrackVals, track, paramIdx, p.value);
+					if (tickLog < 10) {
+						char dbg[128];
+						snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] -> track=%d param=%d value=%d\n",
+							track, paramIdx, p.value);
+						OutputDebugStringA(dbg);
+					}
+				}
+			}
+		}
+		tickLog++;
+	}
+
+	// Log master info and memory layout state
+	{
+		static int miLog = 0;
+		if (miLog++ < 3) {
+			auto* mi = g_loader.GetMasterInfo();
+			char dbg[512];
+			snprintf(dbg, sizeof(dbg),
+				"[BuzzBridgeHost32] Tick: MasterInfo BPM=%d SPS=%d SPT=%d TPB=%d PosInTick=%d "
+				"GlobalVals=%p TrackVals=%p gSlots=%d tSlots=%d trackStructSize=%d\n",
+				mi ? mi->BeatsPerMin : -1, mi ? mi->SamplesPerSec : -1,
+				mi ? mi->SamplesPerTick : -1, mi ? mi->TicksPerBeat : -1,
+				mi ? mi->PosInTick : -1,
+				machine->GlobalVals, machine->TrackVals,
+				(int)gSlots.size(), (int)tSlots.size(),
+				layout->GetTrackStructSize());
+			OutputDebugStringA(dbg);
+		}
+	}
+
+do_tick:
+	// Reset PosInTick for the new tick
+	auto* mi = g_loader.GetMasterInfo();
+	if (mi) mi->PosInTick = 0;
+
+	// Dump TrackVals bytes right before Tick (after all params applied)
+	{
+		static int dumpLog = 0;
+		// Only dump when a note-on is present (to avoid spam)
+		if (dumpLog < 5 && machine->TrackVals && numTrackParams > 0) {
+			// Check if there's a note param in this tick
+			bool hasNote = false;
+			for (auto& p : params) {
+				if (p.paramId < 0) break;
+				if (p.paramId == 1000 && p.value != 0 && p.value != 255) { hasNote = true; break; }
+			}
+			if (hasNote) {
+				int structSize = layout->GetTrackStructSize();
+				unsigned char* tv = (unsigned char*)machine->TrackVals;
+				char hex[256] = {};
+				int pos = 0;
+				for (int b = 0; b < structSize && pos < 200; b++) {
+					pos += snprintf(hex + pos, 256 - pos, "%02X ", tv[b]);
+				}
+				char dbg[512];
+				snprintf(dbg, sizeof(dbg),
+					"[BuzzBridgeHost32] TrackVals FINAL before Tick (size=%d): %s\n", structSize, hex);
+				OutputDebugStringA(dbg);
+				dumpLog++;
+			}
+		}
+	}
+
+	// Call Tick
+	bool ok = SEH_Call([&]() { machine->Tick(); });
+	g_firstTick = false;
+	g_pipe.SendResponse(ok ? kRespOk : kRespError);
+}
+
+static void HandleWork() {
+	BridgeWorkCmd wcmd;
+	if (!g_pipe.ReadAll(&wcmd, sizeof(wcmd))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* machine = g_loader.GetMachine();
+	auto* info = g_loader.GetInfo();
+	if (!machine || !info) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* audio = g_sharedMem.GetAudio();
+	if (!audio) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	int numSamples = wcmd.numSamples;
+	if (numSamples <= 0 || numSamples > kBridgeMaxSamples) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	int workMode = wcmd.workMode;
+	bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
+	bool hasOutput = false;
+
+	auto* mi = g_loader.GetMasterInfo();
+
+	// Process in MAX_BUFFER_LENGTH chunks (Buzz limit)
+	int offset = 0;
+	while (offset < numSamples) {
+		int blockSize = numSamples - offset;
+		if (blockSize > MAX_BUFFER_LENGTH) blockSize = MAX_BUFFER_LENGTH;
+
+		if (monoToStereo) {
+			float inBuf[MAX_BUFFER_LENGTH];
+			float outBuf[MAX_BUFFER_LENGTH];
+
+			if (workMode & WM_READ) {
+				memcpy(inBuf, audio->inputLeft + offset, blockSize * sizeof(float));
+			} else {
+				memset(inBuf, 0, blockSize * sizeof(float));
+			}
+			memset(outBuf, 0, blockSize * sizeof(float));
+
+			bool blockOut = false;
+			SEH_Call([&]() {
+				blockOut = machine->WorkMonoToStereo(inBuf, outBuf, blockSize, workMode);
+			});
+
+			if (blockOut) {
+				memcpy(audio->outputLeft + offset, inBuf, blockSize * sizeof(float));
+				memcpy(audio->outputRight + offset, outBuf, blockSize * sizeof(float));
+				hasOutput = true;
+			} else {
+				memset(audio->outputLeft + offset, 0, blockSize * sizeof(float));
+				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
+			}
+		} else {
+			float workBuf[MAX_BUFFER_LENGTH];
+
+			if (workMode & WM_READ) {
+				memcpy(workBuf, audio->inputLeft + offset, blockSize * sizeof(float));
+			} else {
+				memset(workBuf, 0, blockSize * sizeof(float));
+			}
+
+			// Canary: put a known value so we can tell if Work touched the buffer
+			float canary = workBuf[0];
+			workBuf[0] = 12345.0f;
+
+			bool blockOut = false;
+			SEH_Call([&]() {
+				blockOut = machine->Work(workBuf, blockSize, workMode);
+			});
+
+			{
+				static int canaryLog = 0;
+				if (canaryLog < 5 && blockOut) {
+					char dbg[256];
+					snprintf(dbg, sizeof(dbg),
+						"[BuzzBridgeHost32] Work canary: before=12345 after=%f blockOut=%d\n",
+						workBuf[0], (int)blockOut);
+					OutputDebugStringA(dbg);
+					canaryLog++;
+				}
+			}
+
+			// Restore canary if machine didn't touch it
+			if (workBuf[0] == 12345.0f) workBuf[0] = canary;
+
+			if (blockOut) {
+				{
+					// Log when we first see non-zero audio
+					float maxVal = 0;
+					for (int s = 0; s < blockSize; s++) {
+						float a = workBuf[s] < 0 ? -workBuf[s] : workBuf[s];
+						if (a > maxVal) maxVal = a;
+					}
+					static bool loggedNonZero = false;
+					if (maxVal > 0 && !loggedNonZero) {
+						char dbg[256];
+						snprintf(dbg, sizeof(dbg),
+							"[BuzzBridgeHost32] FIRST NON-ZERO audio: buf[0]=%f max=%f blockSize=%d\n",
+							workBuf[0], maxVal, blockSize);
+						OutputDebugStringA(dbg);
+						loggedNonZero = true;
+					}
+				}
+				memcpy(audio->outputLeft + offset, workBuf, blockSize * sizeof(float));
+				memcpy(audio->outputRight + offset, workBuf, blockSize * sizeof(float));
+				hasOutput = true;
+			} else {
+				memset(audio->outputLeft + offset, 0, blockSize * sizeof(float));
+				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
+			}
+		}
+
+		offset += blockSize;
+		if (mi) mi->PosInTick += blockSize;
+	}
+
+	audio->hasOutput = hasOutput ? 1 : 0;
+
+	{
+		static int workLog = 0;
+		if (workLog < 5 && hasOutput) {
+			char dbg[256];
+			snprintf(dbg, sizeof(dbg),
+				"[BuzzBridgeHost32] Work: hasOutput=%d m2s=%d samples=%d L[0]=%f R[0]=%f\n",
+				(int)hasOutput, (int)monoToStereo, numSamples,
+				audio->outputLeft[0], audio->outputRight[0]);
+			OutputDebugStringA(dbg);
+			workLog++;
+		}
+	}
+
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleStop() {
+	g_loader.StopMachine();
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleSetNumTracks() {
+	int32_t n = 0;
+	if (!g_pipe.ReadAll(&n, sizeof(n))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+	auto* info = g_loader.GetInfo();
+	int minT = (info && info->minTracks > 0) ? info->minTracks : 1;
+	int maxT = (info && info->maxTracks > 0) ? info->maxTracks : 1;
+	if (n < minT) n = minT;
+	if (n > maxT) n = maxT;
+	g_numTracks = n;
+
+	auto* machine = g_loader.GetMachine();
+	if (machine) {
+		SEH_Call([&]() { machine->SetNumTracks(n); });
+	}
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleMidiNote() {
+	BridgeMidiNote mn;
+	if (!g_pipe.ReadAll(&mn, sizeof(mn))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* machine = g_loader.GetMachine();
+	if (machine) {
+		SEH_Call([&]() { machine->MidiNote(mn.channel, mn.note, mn.velocity); });
+	}
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleMidiCC() {
+	BridgeMidiCC cc;
+	if (!g_pipe.ReadAll(&cc, sizeof(cc))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* machineEx = g_loader.GetMachineEx();
+	if (machineEx) {
+		SEH_Call([&]() { machineEx->MidiControlChange(cc.controller, cc.channel, cc.value); });
+	}
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleLoadWave(uint32_t payloadSize) {
+	BridgeLoadWave lw;
+	if (payloadSize < sizeof(lw) || !g_pipe.ReadAll(&lw, sizeof(lw))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	std::string path;
+	if (lw.pathLen > 0) {
+		uint32_t remaining = payloadSize - sizeof(lw);
+		uint32_t toRead = std::min((uint32_t)lw.pathLen, remaining);
+		std::vector<char> buf(toRead + 1, 0);
+		if (!g_pipe.ReadAll(buf.data(), toRead)) {
+			g_pipe.SendResponse(kRespError);
+			return;
+		}
+		path = buf.data();
+	}
+
+	auto* waveTable = g_loader.GetWaveTable();
+	bool ok = false;
+	if (waveTable && !path.empty()) {
+		if (lw.slotIndex > 0) {
+			ok = waveTable->LoadWav(lw.slotIndex, path);
+		} else {
+			ok = waveTable->LoadWavAuto(path) > 0;
+		}
+	}
+	g_pipe.SendResponse(ok ? kRespOk : kRespError);
+}
+
+static void HandleClearWaves() {
+	auto* waveTable = g_loader.GetWaveTable();
+	if (waveTable) waveTable->ClearAll();
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void HandleGetInfo() {
+	auto* info = g_loader.GetInfo();
+	if (!info) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* layout = g_loader.GetParamLayout();
+	auto& gSlots = layout->GetGlobalSlots();
+	auto& tSlots = layout->GetTrackSlots();
+
+	BridgeMachineInfo bmi = {};
+	bmi.type = info->Type;
+	bmi.flags = info->Flags;
+	bmi.numGlobalParams = (int32_t)gSlots.size();
+	bmi.numTrackParams = (int32_t)tSlots.size();
+	bmi.minTracks = info->minTracks;
+	bmi.maxTracks = info->maxTracks;
+	if (info->Name) strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
+	if (info->ShortName) strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
+	if (info->Author) strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+
+	// Build param info array
+	int totalParams = bmi.numGlobalParams + bmi.numTrackParams;
+	std::vector<BridgeParamInfo> paramInfos(totalParams);
+
+	for (int i = 0; i < bmi.numGlobalParams; i++) {
+		auto* bp = gSlots[i].param;
+		auto& pi = paramInfos[i];
+		pi.type = bp->Type;
+		pi.minValue = bp->MinValue;
+		pi.maxValue = bp->MaxValue;
+		pi.noValue = bp->NoValue;
+		pi.defValue = bp->DefValue;
+		pi.flags = bp->Flags;
+		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+	}
+
+	for (int i = 0; i < bmi.numTrackParams; i++) {
+		auto* bp = tSlots[i].param;
+		auto& pi = paramInfos[bmi.numGlobalParams + i];
+		pi.type = bp->Type;
+		pi.minValue = bp->MinValue;
+		pi.maxValue = bp->MaxValue;
+		pi.noValue = bp->NoValue;
+		pi.defValue = bp->DefValue;
+		pi.flags = bp->Flags;
+		if (bp->Name) strncpy(pi.name, bp->Name, sizeof(pi.name) - 1);
+		if (bp->Description) strncpy(pi.description, bp->Description, sizeof(pi.description) - 1);
+	}
+
+	uint32_t payloadSize = sizeof(bmi) + totalParams * sizeof(BridgeParamInfo);
+	BridgeRespHeader hdr = { kRespMachineInfo, payloadSize };
+	g_pipe.WriteAll(&hdr, sizeof(hdr));
+	g_pipe.WriteAll(&bmi, sizeof(bmi));
+	if (totalParams > 0) {
+		g_pipe.WriteAll(paramInfos.data(), totalParams * sizeof(BridgeParamInfo));
+	}
+}
+
+static void HandleSetParam() {
+	BridgeParamValue pv;
+	if (!g_pipe.ReadAll(&pv, sizeof(pv))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+	// Param values are applied at Tick time via HandleTick
+	// This is a placeholder for immediate param set if needed
+	g_pipe.SendResponse(kRespOk);
+}
+
+static void CommandLoop() {
+	while (g_running) {
+		BridgeCmdHeader cmd;
+		if (!g_pipe.ReadCommand(cmd)) {
+			// Pipe broken - exit
+			break;
+		}
+
+		switch (cmd.cmd) {
+			case kCmdPing:
+				g_pipe.SendResponse(kRespOk);
+				break;
+			case kCmdLoadDll:
+				HandleLoadDll(cmd.payloadSize);
+				break;
+			case kCmdInitMachine:
+				HandleInitMachine();
+				break;
+			case kCmdUnload:
+				HandleUnload();
+				break;
+			case kCmdSetMasterInfo:
+				HandleSetMasterInfo();
+				break;
+			case kCmdTick:
+				HandleTick(cmd.payloadSize);
+				break;
+			case kCmdWork:
+				HandleWork();
+				break;
+			case kCmdStop:
+				HandleStop();
+				break;
+			case kCmdMidiNote:
+				HandleMidiNote();
+				break;
+			case kCmdMidiCC:
+				HandleMidiCC();
+				break;
+			case kCmdGetInfo:
+				HandleGetInfo();
+				break;
+			case kCmdSetParam:
+				HandleSetParam();
+				break;
+			case kCmdLoadWave:
+				HandleLoadWave(cmd.payloadSize);
+				break;
+			case kCmdClearWaves:
+				HandleClearWaves();
+				break;
+			case kCmdSetNumTracks:
+				HandleSetNumTracks();
+				break;
+			case kCmdShutdown:
+				g_pipe.SendResponse(kRespOk);
+				g_running = false;
+				break;
+			default: {
+				// Skip unknown payload
+				if (cmd.payloadSize > 0) {
+					std::vector<char> skip(cmd.payloadSize);
+					g_pipe.ReadAll(skip.data(), cmd.payloadSize);
+				}
+				g_pipe.SendResponse(kRespError);
+				break;
+			}
+		}
+	}
+}
+
+int main(int argc, char* argv[])
+{
+	OutputDebugStringA("[BuzzBridgeHost32] Starting...\n");
+
+	if (argc < 2) {
+		OutputDebugStringA("[BuzzBridgeHost32] ERROR: No session ID argument\n");
+		return 1;
+	}
+
+	g_sessionId = argv[1];
+
+	char dbg[512];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Session: %s\n", g_sessionId.c_str());
+	OutputDebugStringA(dbg);
+
+	// Create named pipe (server end)
+	std::string pipeName = BridgePipeName(g_sessionId);
+	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Creating pipe: %s\n", pipeName.c_str());
+	OutputDebugStringA(dbg);
+
+	HANDLE hPipe = CreateNamedPipeA(
+		pipeName.c_str(),
+		PIPE_ACCESS_DUPLEX,
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+		1, // max instances
+		65536, 65536,
+		5000, // timeout ms
+		nullptr
+	);
+
+	if (hPipe == INVALID_HANDLE_VALUE) {
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Failed to create pipe (error %lu)\n", GetLastError());
+		OutputDebugStringA(dbg);
+		return 1;
+	}
+
+	OutputDebugStringA("[BuzzBridgeHost32] Pipe created, waiting for connection...\n");
+	g_pipe.SetHandle(hPipe);
+
+	// Create shared memory for audio
+	std::string shmName = BridgeSharedMemName(g_sessionId);
+	if (!g_sharedMem.Create(shmName, sizeof(BridgeSharedAudio))) {
+		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Failed to create shared memory: %s (error %lu)\n",
+			shmName.c_str(), GetLastError());
+		OutputDebugStringA(dbg);
+		return 1;
+	}
+
+	OutputDebugStringA("[BuzzBridgeHost32] Shared memory created, waiting for client...\n");
+
+	// Wait for the 64-bit plugin to connect
+	if (!ConnectNamedPipe(hPipe, nullptr)) {
+		DWORD err = GetLastError();
+		if (err != ERROR_PIPE_CONNECTED) {
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] ConnectNamedPipe failed (error %lu)\n", err);
+			OutputDebugStringA(dbg);
+			return 1;
+		}
+	}
+
+	OutputDebugStringA("[BuzzBridgeHost32] Client connected, entering command loop\n");
+
+	// Enter command loop
+	CommandLoop();
+
+	// Cleanup
+	g_loader.Unload();
+	g_pipe.Close();
+	g_sharedMem.Close();
+
+	return 0;
+}

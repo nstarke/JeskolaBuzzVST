@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Configure 32-bit
+        run: cmake -B build32 -G "Visual Studio 17 2022" -A Win32
+
+      - name: Build 32-bit plugin
+        run: cmake --build build32 --config Release --target BuzzBridge
+
+      - name: Build 32-bit bridge host
+        run: cmake --build build32 --config Release --target BuzzBridgeHost32
+
+      - name: Build and run tests
+        run: |
+          cmake --build build32 --config Release --target BuzzBridgeTests
+          ctest --test-dir build32 -C Release --output-on-failure
+
+      - name: Configure 64-bit
+        run: cmake -B build64 -G "Visual Studio 17 2022" -A x64
+
+      - name: Build 64-bit plugin
+        run: cmake --build build64 --config Release --target BuzzBridge
+
+      - name: Assemble VST3 bundle
+        run: |
+          mkdir -p dist/BuzzBridge.vst3/Contents/x86-win
+          mkdir -p dist/BuzzBridge.vst3/Contents/x86_64-win
+          mkdir -p dist/BuzzBridge.vst3/Contents/Resources
+          cp build32/VST3/Release/BuzzBridge.vst3/Contents/x86-win/BuzzBridge.vst3 dist/BuzzBridge.vst3/Contents/x86-win/
+          cp build64/VST3/Release/BuzzBridge.vst3/Contents/x86_64-win/BuzzBridge.vst3 dist/BuzzBridge.vst3/Contents/x86_64-win/
+          cp build32/bin/Release/BuzzBridgeHost32.exe dist/BuzzBridge.vst3/Contents/x86_64-win/
+          cp build64/VST3/Release/BuzzBridge.vst3/Contents/Resources/moduleinfo.json dist/BuzzBridge.vst3/Contents/Resources/
+        shell: bash
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ github.ref_name }} installer\BuzzBridge.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/BuzzBridge-Setup-${{ github.ref_name }}.exe
+          generate_release_notes: true
