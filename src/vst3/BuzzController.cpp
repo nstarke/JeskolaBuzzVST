@@ -1269,6 +1269,41 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 		if (!prsPath.empty() && presetLoader.Save(prsPath)) {
 			OutputDebugStringA("[BuzzBridge] Preset saved OK\n");
 
+			// Backup to OneDrive if it exists, preserving Gear directory structure
+			char profileDir[MAX_PATH] = {};
+			DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
+			if (len > 0 && len < MAX_PATH) {
+				std::string oneDrive = std::string(profileDir) + "\\OneDrive";
+				DWORD attr = GetFileAttributesA(oneDrive.c_str());
+				if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+					// Extract relative path from Gear root (look for \Gear\ in the path)
+					std::string lowerPrs = prsPath;
+					for (auto& c : lowerPrs) c = (char)tolower((unsigned char)c);
+					size_t gearPos = lowerPrs.find("\\gear\\");
+					if (gearPos == std::string::npos) gearPos = lowerPrs.find("/gear/");
+					if (gearPos != std::string::npos) {
+						std::string relPath = prsPath.substr(gearPos); // e.g. \Gear\generators\Machine.prs
+						std::string backupPath = oneDrive + "\\BuzzVST" + relPath;
+
+						// Create directory tree
+						std::string backupDir = backupPath;
+						size_t lastSlash = backupDir.find_last_of("\\/");
+						if (lastSlash != std::string::npos) {
+							backupDir = backupDir.substr(0, lastSlash);
+							CreateDirectoryA((oneDrive + "\\BuzzVST").c_str(), nullptr);
+							CreateDirectoryA((oneDrive + "\\BuzzVST\\Gear").c_str(), nullptr);
+							CreateDirectoryA(backupDir.c_str(), nullptr);
+						}
+
+						if (presetLoader.Save(backupPath)) {
+							char dbg[512];
+							snprintf(dbg, sizeof(dbg), "[BuzzBridge] Preset backup saved to: %s\n", backupPath.c_str());
+							OutputDebugStringA(dbg);
+						}
+					}
+				}
+			}
+
 			// Update combo box
 			if (activeView) {
 				std::vector<std::string> names;
