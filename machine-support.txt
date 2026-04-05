@@ -655,4 +655,4 @@ Failed machines:
   [FX] Magicfish IT Sample Loader               NO AUDIO
   [FX] Morex 32-Bit Stereo Wave In              NO AUDIO
   [FX] Zephod FFTsynth                          NO AUDIO
-  [FX] ld grain fx                              NO AUDIO
+  [FX] ld grain fx                              NO AUDIO  
