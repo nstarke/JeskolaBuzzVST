@@ -6,15 +6,9 @@
 #include <string>
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/common/SEHGuard.h"
+#include "TestHelpers.h"
 
 using namespace BuzzVst;
-
-static std::string GetGearPath(const char* rel) {
-    char profileDir[MAX_PATH] = {};
-    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return "";
-    return std::string(profileDir) + "\\Buzz\\Gear\\" + rel;
-}
 
 int main() {
     printf("FPU control word: 0x%08X\n", _controlfp(0, 0));

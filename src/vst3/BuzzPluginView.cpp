@@ -370,19 +370,18 @@ void BuzzPluginView::createControls(HWND parent)
 		innerMargin, y + S(2), S(45), S(16), hwndContainer, nullptr, hInst, nullptr);
 	SendMessage(hwndPresetLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-	int presetBtnW = S(50);
+	int presetBtnW = S(75);
 	hwndPresetCombo = CreateWindowExW(0, L"COMBOBOX", L"",
 		WS_CHILD | CBS_DROPDOWNLIST | WS_VSCROLL,
 		innerMargin + S(48), y, w - 2 * innerMargin - S(48) - presetBtnW - S(4), S(200),
 		hwndContainer, (HMENU)(INT_PTR)kPresetComboID, hInst, nullptr);
 	SendMessage(hwndPresetCombo, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
 
-	hwndSavePresetButton = CreateWindowExW(0, L"BUTTON", L"Save",
-		WS_CHILD | BS_PUSHBUTTON,
+	hwndSavePresetButton = CreateWindowExW(0, L"BUTTON", L"Save Preset",
+		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
 		w - innerMargin - presetBtnW, y, presetBtnW, S(22),
 		hwndContainer, (HMENU)(INT_PTR)kSavePresetButtonID, hInst, nullptr);
 	SendMessage(hwndSavePresetButton, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
-	// Hidden until a machine is loaded
 	y += S(28);
 
 	// Parameters label

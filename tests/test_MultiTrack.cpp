@@ -1,6 +1,5 @@
-#include <windows.h>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/vst3/ParameterMapping.h"
@@ -8,23 +7,6 @@
 #include "../src/common/SEHGuard.h"
 
 using namespace BuzzVst;
-
-// ===========================================================================
-// Helpers
-// ===========================================================================
-
-static CMachineParameter MakeParam(CMPType type, int minVal, int maxVal, int noVal, int defVal, int flags = MPF_STATE) {
-	CMachineParameter p = {};
-	p.Type = type;
-	p.Name = "Test";
-	p.Description = "Test";
-	p.MinValue = minVal;
-	p.MaxValue = maxVal;
-	p.NoValue = noVal;
-	p.DefValue = defVal;
-	p.Flags = flags;
-	return p;
-}
 
 // ===========================================================================
 // Parameter ID encoding/decoding
@@ -221,22 +203,11 @@ TEST(MultiTrack, NoTrackintOverlapsGlobal) {
 // Integration: real machine with tracks
 // ===========================================================================
 
-static std::string GetRefPath(const char* relPath) {
-	char exePath[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-	std::string path = exePath;
-	for (int i = 0; i < 4; i++) {
-		size_t pos = path.find_last_of("\\/");
-		if (pos != std::string::npos) path = path.substr(0, pos);
-	}
-	path += "/";
-	path += relPath;
-	return path;
-}
+// GetGearPath is in TestHelpers.h
 
 TEST(MultiTrack, RealMachineTrackInfo) {
 	// Load a generator and check its track limits
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -258,7 +229,7 @@ TEST(MultiTrack, RealMachineTrackInfo) {
 }
 
 TEST(MultiTrack, RealMachineSetNumTracks) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {

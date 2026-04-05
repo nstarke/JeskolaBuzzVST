@@ -20,6 +20,7 @@
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/vst3/GearScanner.h"
 #include "../src/common/SEHGuard.h"
+#include "../src/common/PatchMessageBoxes.h"
 
 using namespace BuzzVst;
 
@@ -326,24 +327,6 @@ static MachineTestResult runChildTest(const char* myExe, const GearEntry& entry)
     CloseHandle(pi.hThread);
 
     return r;
-}
-
-// Patch MessageBoxA/W to no-ops so nag screens don't block the test
-static void PatchMessageBoxes() {
-    static const unsigned char stub[] = { 0xB8, 0x01, 0x00, 0x00, 0x00, 0xC2, 0x10, 0x00 };
-    HMODULE hUser32 = GetModuleHandleA("user32.dll");
-    if (!hUser32) hUser32 = LoadLibraryA("user32.dll");
-    if (!hUser32) return;
-    const char* funcs[] = { "MessageBoxA", "MessageBoxW" };
-    for (auto* name : funcs) {
-        void* addr = (void*)GetProcAddress(hUser32, name);
-        if (!addr) continue;
-        DWORD oldProtect = 0;
-        if (VirtualProtect(addr, sizeof(stub), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            memcpy(addr, stub, sizeof(stub));
-            VirtualProtect(addr, sizeof(stub), oldProtect, &oldProtect);
-        }
-    }
 }
 
 int main(int argc, char* argv[]) {

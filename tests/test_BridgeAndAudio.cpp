@@ -2,6 +2,7 @@
 // wave table boundary conditions, and parameter persistence data flow.
 
 #include "TestFramework.h"
+#include "TestHelpers.h"
 #include "../src/bridge/BridgeIPC.h"
 #include "../src/vst3/plugids.h"
 #include "../src/buzz/BuzzWaveTable.h"
@@ -11,21 +12,13 @@
 #include "../src/buzz/BuzzOscTables.h"
 #include "../src/buzz/BuzzPresetLoader.h"
 #include "../src/vst3/ParameterMapping.h"
-#include "../src/buzz/MachineInterface.h"
-#include <windows.h>
+#include "../src/vst3/GearScanner.h"
 #include <cstring>
 #include <cmath>
 #include <limits>
 #include <fstream>
 
 using namespace BuzzVst;
-
-static std::string GetGearPath(const char* relativePath) {
-    char profileDir[MAX_PATH] = {};
-    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return "";
-    return std::string(profileDir) + "\\Buzz\\Gear\\" + relativePath;
-}
 
 // ============================================================================
 // 1. New BridgeIPC structs (kCmdDescribeValue, kRespDescribeValue)
@@ -209,17 +202,7 @@ TEST(MidiCCMapping, GlobalTrackNoOverlap) {
 // 7. ParameterMapping with non-zero min (deferred restore path)
 // ============================================================================
 
-static CMachineParameter MakeParam(int type, int mn, int mx, int noVal, int defVal, int flags = MPF_STATE) {
-    CMachineParameter p = {};
-    p.Type = (CMPType)type;
-    p.MinValue = mn;
-    p.MaxValue = mx;
-    p.NoValue = noVal;
-    p.DefValue = defVal;
-    p.Flags = flags;
-    p.Name = "Test";
-    return p;
-}
+// MakeParam is in TestHelpers.h
 
 TEST(DeferredParamRestore, NonZeroMinConversion) {
     // Simulates the deferred restore path: (buzzValue - mn) / stepCount
@@ -807,7 +790,7 @@ TEST(PresetSave, RoundtripWithComment) {
 }
 
 // ============================================================================
-// 17. Preset validation (untrusted .prs files)
+// 17. Preset validation
 // ============================================================================
 
 TEST(PresetValidation, RejectTruncatedFile) {
@@ -926,3 +909,365 @@ TEST(PresetValidation, ControlCharsStripped) {
 
     DeleteFileA(tempPrs.c_str());
 }
+
+// ============================================================================
+// 18. BridgePipe real I/O tests (named pipe roundtrip)
+// ============================================================================
+
+TEST(BridgePipeIO, WriteReadRoundtrip) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_PipeIO";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    // Client sends command, server reads it
+    ASSERT_TRUE(client.SendCommand(kCmdPing));
+    BridgeCmdHeader cmd = {};
+    ASSERT_TRUE(server.ReadCommand(cmd));
+    ASSERT_EQ(cmd.cmd, kCmdPing);
+    ASSERT_EQ(cmd.payloadSize, 0u);
+
+    // Server sends response, client reads it
+    ASSERT_TRUE(server.SendResponse(kRespOk));
+    BridgeRespHeader resp = {};
+    ASSERT_TRUE(client.ReadResponse(resp));
+    ASSERT_EQ(resp.resp, kRespOk);
+
+    server.Close();
+    client.Close();
+}
+
+TEST(BridgePipeIO, CommandWithPayload) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_Payload";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    const char* path = "C:\\test\\machine.dll";
+    uint32_t pathLen = (uint32_t)strlen(path);
+    ASSERT_TRUE(client.SendCommand(kCmdLoadDll, path, pathLen));
+
+    BridgeCmdHeader cmd = {};
+    ASSERT_TRUE(server.ReadCommand(cmd));
+    ASSERT_EQ(cmd.cmd, kCmdLoadDll);
+    ASSERT_EQ(cmd.payloadSize, pathLen);
+
+    char buf[256] = {};
+    ASSERT_TRUE(server.ReadAll(buf, cmd.payloadSize));
+    ASSERT_EQ(std::string(buf, cmd.payloadSize), std::string(path));
+
+    server.Close();
+    client.Close();
+}
+
+TEST(BridgePipeIO, MasterInfoRoundtrip) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_MasterInfo";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    BridgeMasterInfo mi = { 125, 4, 44100 };
+    ASSERT_TRUE(client.SendCommand(kCmdSetMasterInfo, &mi, sizeof(mi)));
+
+    BridgeCmdHeader cmd = {};
+    ASSERT_TRUE(server.ReadCommand(cmd));
+    ASSERT_EQ(cmd.cmd, kCmdSetMasterInfo);
+
+    BridgeMasterInfo received = {};
+    ASSERT_TRUE(server.ReadAll(&received, sizeof(received)));
+    ASSERT_EQ(received.beatsPerMin, 125);
+    ASSERT_EQ(received.ticksPerBeat, 4);
+    ASSERT_EQ(received.samplesPerSec, 44100);
+
+    server.Close();
+    client.Close();
+}
+
+TEST(BridgePipeIO, TickParamsRoundtrip) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_TickParams";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    std::vector<BridgeTickParam> params = {
+        {0, 100}, {5, 200}, {1003, 50}, {-1, 0}
+    };
+    uint32_t size = (uint32_t)(params.size() * sizeof(BridgeTickParam));
+    ASSERT_TRUE(client.SendCommand(kCmdTick, params.data(), size));
+
+    BridgeCmdHeader cmd = {};
+    ASSERT_TRUE(server.ReadCommand(cmd));
+    ASSERT_EQ(cmd.cmd, kCmdTick);
+
+    std::vector<BridgeTickParam> received(params.size());
+    ASSERT_TRUE(server.ReadAll(received.data(), cmd.payloadSize));
+    ASSERT_EQ(received[0].paramId, 0);
+    ASSERT_EQ(received[0].value, 100);
+    ASSERT_EQ(received[2].paramId, 1003);
+    ASSERT_EQ(received[3].paramId, -1);
+
+    server.Close();
+    client.Close();
+}
+
+TEST(BridgePipeIO, ResponseWithPayload) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_RespPayload";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    const char* desc = "Low Pass";
+    uint32_t descLen = (uint32_t)strlen(desc);
+    ASSERT_TRUE(server.SendResponse(kRespDescribeValue, desc, descLen));
+
+    BridgeRespHeader resp = {};
+    ASSERT_TRUE(client.ReadResponse(resp));
+    ASSERT_EQ(resp.resp, kRespDescribeValue);
+    ASSERT_EQ(resp.payloadSize, descLen);
+
+    char buf[64] = {};
+    ASSERT_TRUE(client.ReadAll(buf, resp.payloadSize));
+    ASSERT_EQ(std::string(buf, resp.payloadSize), std::string("Low Pass"));
+
+    server.Close();
+    client.Close();
+}
+
+TEST(BridgePipeIO, InvalidPipeOperationsFail) {
+    BridgePipe pipe;
+    BridgeCmdHeader cmd = {};
+    ASSERT_FALSE(pipe.ReadCommand(cmd));
+    ASSERT_FALSE(pipe.SendCommand(kCmdPing));
+    BridgeRespHeader resp = {};
+    ASSERT_FALSE(pipe.ReadResponse(resp));
+    ASSERT_FALSE(pipe.SendResponse(kRespOk));
+    char buf[4] = {};
+    ASSERT_FALSE(pipe.ReadAll(buf, 4));
+    ASSERT_FALSE(pipe.WriteAll(buf, 4));
+}
+
+TEST(BridgePipeIO, MidiNoteRoundtrip) {
+    std::string pipeName = "\\\\.\\pipe\\BuzzBridgeTest_MidiNote";
+    HANDLE hServer = CreateNamedPipeA(pipeName.c_str(),
+        PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1, 4096, 4096, 0, nullptr);
+    ASSERT_NE(hServer, INVALID_HANDLE_VALUE);
+    HANDLE hClient = CreateFileA(pipeName.c_str(),
+        GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(hClient, INVALID_HANDLE_VALUE);
+    ConnectNamedPipe(hServer, nullptr);
+
+    BridgePipe server, client;
+    server.SetHandle(hServer);
+    client.SetHandle(hClient);
+
+    BridgeMidiNote mn = { 0, 60, 100 };
+    ASSERT_TRUE(client.SendCommand(kCmdMidiNote, &mn, sizeof(mn)));
+
+    BridgeCmdHeader cmd = {};
+    ASSERT_TRUE(server.ReadCommand(cmd));
+    ASSERT_EQ(cmd.cmd, kCmdMidiNote);
+
+    BridgeMidiNote received = {};
+    ASSERT_TRUE(server.ReadAll(&received, sizeof(received)));
+    ASSERT_EQ(received.channel, 0);
+    ASSERT_EQ(received.note, 60);
+    ASSERT_EQ(received.velocity, 100);
+
+    server.Close();
+    client.Close();
+}
+
+// ============================================================================
+// 19. BridgeSharedMem real tests
+// ============================================================================
+
+TEST(BridgeSharedMemIO, CreateAndAccess) {
+    BridgeSharedMem mem;
+    ASSERT_TRUE(mem.Create("Local\\BuzzBridgeTest_ShmCreate", sizeof(BridgeSharedAudio)));
+
+    auto* audio = mem.GetAudio();
+    ASSERT_NOT_NULL(audio);
+    ASSERT_EQ(audio->numSamples, 0);
+    ASSERT_EQ(audio->hasOutput, 0);
+    ASSERT_EQ(audio->outputLeft[0], 0.0f);
+
+    audio->numSamples = 256;
+    audio->hasOutput = 1;
+    audio->outputLeft[0] = 12345.0f;
+    ASSERT_EQ(audio->numSamples, 256);
+    ASSERT_EQ(audio->hasOutput, 1);
+    ASSERT_EQ(audio->outputLeft[0], 12345.0f);
+
+    mem.Close();
+    ASSERT_NULL(mem.GetData());
+}
+
+TEST(BridgeSharedMemIO, CreateAndOpenSharesData) {
+    std::string name = "Local\\BuzzBridgeTest_ShmShare";
+
+    BridgeSharedMem creator;
+    ASSERT_TRUE(creator.Create(name, sizeof(BridgeSharedAudio)));
+    auto* a1 = creator.GetAudio();
+    ASSERT_NOT_NULL(a1);
+    a1->outputLeft[0] = 42.0f;
+    a1->numSamples = 128;
+
+    BridgeSharedMem opener;
+    ASSERT_TRUE(opener.Open(name, sizeof(BridgeSharedAudio)));
+    auto* a2 = opener.GetAudio();
+    ASSERT_NOT_NULL(a2);
+
+    // Reads from opener see creator's writes
+    ASSERT_EQ(a2->outputLeft[0], 42.0f);
+    ASSERT_EQ(a2->numSamples, 128);
+
+    // Writes from opener visible to creator
+    a2->outputRight[0] = 99.0f;
+    ASSERT_EQ(a1->outputRight[0], 99.0f);
+
+    opener.Close();
+    creator.Close();
+}
+
+TEST(BridgeSharedMemIO, OpenNonexistentFails) {
+    BridgeSharedMem mem;
+    ASSERT_FALSE(mem.Open("Local\\BuzzBridgeTest_NoSuchMem", 1024));
+    ASSERT_NULL(mem.GetData());
+}
+
+TEST(BridgeSharedMemIO, DoubleCloseSafe) {
+    BridgeSharedMem mem;
+    ASSERT_TRUE(mem.Create("Local\\BuzzBridgeTest_DblClose", 4096));
+    mem.Close();
+    mem.Close();
+    ASSERT_NULL(mem.GetData());
+}
+
+TEST(BridgeSharedMemIO, AudioBufferFullWrite) {
+    BridgeSharedMem mem;
+    ASSERT_TRUE(mem.Create("Local\\BuzzBridgeTest_FullBuf", sizeof(BridgeSharedAudio)));
+    auto* audio = mem.GetAudio();
+    ASSERT_NOT_NULL(audio);
+
+    // Write full buffer worth of samples
+    for (int i = 0; i < kBridgeMaxSamples; i++) {
+        audio->outputLeft[i] = (float)i;
+        audio->outputRight[i] = (float)(i * 2);
+    }
+    audio->numSamples = kBridgeMaxSamples;
+    audio->hasOutput = 1;
+
+    ASSERT_EQ(audio->outputLeft[0], 0.0f);
+    ASSERT_EQ(audio->outputLeft[kBridgeMaxSamples - 1], (float)(kBridgeMaxSamples - 1));
+    ASSERT_EQ(audio->outputRight[100], 200.0f);
+
+    mem.Close();
+}
+
+// ============================================================================
+// 20. Remaining coverage gaps
+// ============================================================================
+
+TEST(BuzzCallbacksExtra, GetTPBDefault) {
+    BuzzCallbacks cb;
+    ASSERT_EQ(cb.GetTPB(), 4);
+}
+
+TEST(BuzzCallbacksExtra, GetTPBFromMasterInfo) {
+    BuzzCallbacks cb;
+    CMasterInfo mi = {};
+    mi.TicksPerBeat = 8;
+    cb.masterInfoPtr = &mi;
+    ASSERT_EQ(cb.GetTPB(), 8);
+}
+
+TEST(BuzzCallbacksExtra, GetTempoDefault) {
+    BuzzCallbacks cb;
+    ASSERT_EQ(cb.GetTempo(), 125);
+}
+
+TEST(BuzzCallbacksExtra, GetTempoFromMasterInfo) {
+    BuzzCallbacks cb;
+    CMasterInfo mi = {};
+    mi.BeatsPerMin = 140;
+    cb.masterInfoPtr = &mi;
+    ASSERT_EQ(cb.GetTempo(), 140);
+}
+
+TEST(OscTablesExtra, InitializeIdempotent) {
+    BuzzOscTables::Initialize();
+    const short* sine1 = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_NOT_NULL(sine1);
+    short saved = sine1[512];
+
+    BuzzOscTables::Initialize();
+    const short* sine2 = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_EQ(sine1, sine2);
+    ASSERT_EQ(sine2[512], saved);
+}
+
+TEST(OscTablesExtra, AllWaveformsDistinct) {
+    const short* tables[BUZZ_NUM_WAVEFORMS];
+    for (int w = 0; w < BUZZ_NUM_WAVEFORMS; w++) {
+        tables[w] = BuzzOscTables::GetTable(w);
+        ASSERT_NOT_NULL(tables[w]);
+    }
+    for (int a = 0; a < BUZZ_NUM_WAVEFORMS; a++) {
+        for (int b = a + 1; b < BUZZ_NUM_WAVEFORMS; b++) {
+            int diffs = 0;
+            for (int i = 0; i < 2048; i++) {
+                if (tables[a][i] != tables[b][i]) diffs++;
+            }
+            CHECK_TRUE(diffs > 200);
+        }
+    }
+}
+
+// GearScanner tests moved to test_GearScanner.cpp (shared scan to avoid hangs)

@@ -5,29 +5,14 @@
 // are omitted because the test binary does not link against BuzzProcessor.cpp
 // or the full VST3 SDK components required to instantiate a processor.
 
-#include <windows.h>
 #include <climits>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/vst3/ParameterMapping.h"
 
 using namespace BuzzVst;
-
-// --- Helper: create mock CMachineParameter ---
-static CMachineParameter MakeParam(CMPType type, int minVal, int maxVal, int noVal, int defVal, int flags = MPF_STATE) {
-    CMachineParameter p = {};
-    p.Type = type;
-    p.Name = "TestParam";
-    p.Description = "Test";
-    p.MinValue = minVal;
-    p.MaxValue = maxVal;
-    p.NoValue = noVal;
-    p.DefValue = defVal;
-    p.Flags = flags;
-    return p;
-}
 
 // Helper: build a layout with one global byte param and one track byte param
 static void BuildSimpleLayout(BuzzParamLayout& layout,

@@ -2,14 +2,13 @@
 // Covers untested edge cases, IPC struct layouts, additional callback coverage,
 // oscillator table properties, wave table edge cases, and more.
 
-#include <windows.h>
 #include <cstring>
 #include <cmath>
 #include <climits>
 #include <vector>
 #include <string>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/buzz/BuzzCallbacks.h"
 #include "../src/buzz/BuzzMachineLoader.h"
@@ -22,24 +21,6 @@
 #include "../src/common/SEHGuard.h"
 
 using namespace BuzzVst;
-
-// ===========================================================================
-// Helpers
-// ===========================================================================
-
-static CMachineParameter MakeParam(CMPType type, int minVal, int maxVal,
-                                    int noVal, int defVal, int flags = MPF_STATE) {
-    CMachineParameter p = {};
-    p.Type = type;
-    p.Name = "TestParam";
-    p.Description = "TestDesc";
-    p.MinValue = minVal;
-    p.MaxValue = maxVal;
-    p.NoValue = noVal;
-    p.DefValue = defVal;
-    p.Flags = flags;
-    return p;
-}
 
 // ===========================================================================
 // 1. Bridge IPC struct sizes and layout

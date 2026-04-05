@@ -80,12 +80,12 @@ Testing 124 generators, 372 effects (skipped 22 VST/Peer)
   Rout SoundFont Loader                    NO AUDIO
   Ruff Speccy II                           ERROR (code=-1073740791)
   Rymix KyrieSpectra                       ERROR (code=-1073740791)
-  Saxpy's HT-700                           OK (max=3037.7)
+  Saxpy's HT-700                           OK (max=3043.3)
   Sgorpi Clap                              NO AUDIO
   Sgorpi's Mean Bassdrum Machine           NO AUDIO
   SuperDonut Ultimate Drum                 NO AUDIO
   Synthrom Sinus v2.0                      NO AUDIO
-  TEH NOISEMAKING                          OK (max=49885.8)
+  TEH NOISEMAKING                          OK (max=46062.4)
   WhiteNoise Scratcher                     NO AUDIO
   Zephod & Thevider WaveEdit               NO AUDIO
   Zephod Blok2009                          OK (max=2156.2)
@@ -257,8 +257,8 @@ size of version 4 soun)
   Frequency UnKnown Class B                OK (max=3383.5)
   Frequency UnKnown Freq Out               OK (max=16383.9)
   Frequency UnKnown THCMA                  OK (max=0.0)
-  Fuzzpilz Chorpse                         OK (max=8386.7)
-  Fuzzpilz Chorpse Senior                  OK (max=6429.6)
+  Fuzzpilz Chorpse                         OK (max=14315.0)
+  Fuzzpilz Chorpse Senior                  OK (max=5005.7)
   Fuzzpilz Clipper                         OK (max=16383.9)
   Fuzzpilz Drink                           OK (max=16383.9)
   Fuzzpilz Eff Emm                         OK (max=32767.9)

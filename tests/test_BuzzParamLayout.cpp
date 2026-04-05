@@ -1,23 +1,8 @@
-#include <windows.h>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzParamLayout.h"
 
 using namespace BuzzVst;
-
-// --- Helper: create mock CMachineParameter ---
-static CMachineParameter MakeParam(CMPType type, int minVal, int maxVal, int noVal, int defVal, int flags = MPF_STATE) {
-	CMachineParameter p = {};
-	p.Type = type;
-	p.Name = "TestParam";
-	p.Description = "Test";
-	p.MinValue = minVal;
-	p.MaxValue = maxVal;
-	p.NoValue = noVal;
-	p.DefValue = defVal;
-	p.Flags = flags;
-	return p;
-}
 
 // ===== GetParamByteSize =====
 

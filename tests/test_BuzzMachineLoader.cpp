@@ -1,30 +1,11 @@
-#include <windows.h>
 #include <cfloat>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/common/SEHGuard.h"
 
 using namespace BuzzVst;
-
-// Helper to build paths relative to the test executable
-// The ref DLLs are in the repo at ref/Gear/
-static std::string GetRefPath(const char* relPath) {
-	// Get the directory of the test executable
-	char exePath[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-
-	// Walk up from build/bin/Release/ to project root
-	std::string path = exePath;
-	for (int i = 0; i < 4; i++) {
-		size_t pos = path.find_last_of("\\/");
-		if (pos != std::string::npos) path = path.substr(0, pos);
-	}
-	path += "/";
-	path += relPath;
-	return path;
-}
 
 // ===== Loading invalid paths =====
 
@@ -56,7 +37,7 @@ TEST(MachineLoader, LoadNonMachineDll) {
 // ===== Loading real generator DLLs =====
 
 TEST(MachineLoader, LoadFSMKickXP) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	bool loaded = loader.Load(path.c_str());
@@ -79,7 +60,7 @@ TEST(MachineLoader, LoadFSMKickXP) {
 }
 
 TEST(MachineLoader, LoadBTDSysPulsar) {
-	std::string path = GetRefPath("ref/Gear/Generators/BTDSys Pulsar.dll");
+	std::string path = GetGearPath("generators\\BTDSys Pulsar.dll");
 
 	BuzzMachineLoader loader;
 	bool loaded = loader.Load(path.c_str());
@@ -96,7 +77,7 @@ TEST(MachineLoader, LoadBTDSysPulsar) {
 // ===== Loading real effect DLLs =====
 
 TEST(MachineLoader, LoadCheapoAmp) {
-	std::string path = GetRefPath("ref/Gear/Effects/cheapo amp.dll");
+	std::string path = GetGearPath("effects\\cheapo amp.dll");
 
 	BuzzMachineLoader loader;
 	bool loaded = loader.Load(path.c_str());
@@ -111,7 +92,7 @@ TEST(MachineLoader, LoadCheapoAmp) {
 }
 
 TEST(MachineLoader, LoadBigyoFilter) {
-	std::string path = GetRefPath("ref/Gear/Effects/Bigyo Filter.dll");
+	std::string path = GetGearPath("effects\\Bigyo Filter.dll");
 
 	BuzzMachineLoader loader;
 	bool loaded = loader.Load(path.c_str());
@@ -128,7 +109,7 @@ TEST(MachineLoader, LoadBigyoFilter) {
 // ===== Parameter validation =====
 
 TEST(MachineLoader, ParametersHaveValidRanges) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -156,7 +137,7 @@ TEST(MachineLoader, ParametersHaveValidRanges) {
 // ===== Param layout from real machine =====
 
 TEST(MachineLoader, ParamLayoutFromRealMachine) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -174,7 +155,7 @@ TEST(MachineLoader, ParamLayoutFromRealMachine) {
 // ===== Machine initialization =====
 
 TEST(MachineLoader, InitFSMKickXP) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -193,7 +174,7 @@ TEST(MachineLoader, InitFSMKickXP) {
 }
 
 TEST(MachineLoader, InitCheapoAmp) {
-	std::string path = GetRefPath("ref/Gear/Effects/cheapo amp.dll");
+	std::string path = GetGearPath("effects\\cheapo amp.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -211,7 +192,7 @@ TEST(MachineLoader, InitCheapoAmp) {
 // ===== Machine has valid GlobalVals after creation =====
 
 TEST(MachineLoader, GlobalValsNotNullAfterInit) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -235,7 +216,7 @@ TEST(MachineLoader, GlobalValsNotNullAfterInit) {
 // ===== Tick doesn't crash =====
 
 TEST(MachineLoader, TickDoesNotCrash) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -263,7 +244,7 @@ TEST(MachineLoader, TickDoesNotCrash) {
 // ===== Work produces output =====
 
 TEST(MachineLoader, WorkProducesOutput) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -295,7 +276,7 @@ TEST(MachineLoader, FSMKickXPWithNote) {
 	unsigned int fpuCw = _controlfp(0, 0);
 	printf("  (FPU=0x%08X) ", fpuCw);
 
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -351,7 +332,7 @@ TEST(MachineLoader, FSMKickXPWithNote) {
 }
 
 TEST(MachineLoader, FSMInfectorProducesOutput) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Infector.dll");
+	std::string path = GetGearPath("generators\\FSM Infector.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -471,7 +452,7 @@ TEST(MachineLoader, BTDSysPulsarProducesOutput) {
 	printf("  (skipped - hangs in test suite) ");
 	return;
 
-	std::string path = GetRefPath("ref/Gear/Generators/BTDSys Pulsar.dll");
+	std::string path = GetGearPath("generators\\BTDSys Pulsar.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -547,7 +528,7 @@ TEST(MachineLoader, BTDSysPulsarProducesOutput) {
 // ===== Effect processes audio =====
 
 TEST(MachineLoader, EffectProcessesAudio) {
-	std::string path = GetRefPath("ref/Gear/Effects/cheapo amp.dll");
+	std::string path = GetGearPath("effects\\cheapo amp.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -581,7 +562,7 @@ TEST(MachineLoader, EffectProcessesAudio) {
 // ===== Unload and reload =====
 
 TEST(MachineLoader, UnloadAndReload) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -649,7 +630,7 @@ TEST(MachineLoader, UpdateMasterInfoClamping) {
 // ===== Stop doesn't crash =====
 
 TEST(MachineLoader, StopDoesNotCrash) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -670,8 +651,8 @@ TEST(MachineLoader, StopDoesNotCrash) {
 // ===== Multiple machines can be loaded simultaneously =====
 
 TEST(MachineLoader, MultipleMachinesSimultaneous) {
-	std::string genPath = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
-	std::string fxPath = GetRefPath("ref/Gear/Effects/cheapo amp.dll");
+	std::string genPath = GetGearPath("generators\\FSM Kick XP.dll");
+	std::string fxPath = GetGearPath("effects\\cheapo amp.dll");
 
 	BuzzMachineLoader gen, fx;
 
@@ -698,7 +679,7 @@ TEST(MachineLoader, MultipleMachinesSimultaneous) {
 // ===== Loaded path tracking =====
 
 TEST(MachineLoader, LoadedPathTracking) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	ASSERT_TRUE(loader.GetLoadedPath().empty());
