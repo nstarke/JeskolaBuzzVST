@@ -2,7 +2,7 @@
 
 # BuzzBridge VST3
 
-![Tests](https://img.shields.io/badge/tests-513%20passed-brightgreen)
+[![CI](https://github.com/nstarke/JeskolaBuzzVST/actions/workflows/ci.yml/badge.svg)](https://github.com/nstarke/JeskolaBuzzVST/actions/workflows/ci.yml)
 
 ![images/image.png](images/image.png)
 
