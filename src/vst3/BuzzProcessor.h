@@ -153,7 +153,11 @@ protected:
 	float workBufRight[MAX_BUFFER_LENGTH];
 
 	// ---- Sample-rate conversion (Buzz machines assume 44100 Hz) ----
-	bool needsResampling = false;
+	bool needsResampling = false;  // true when host rate != 44100
+
+	// Whether to actually resample.  Both generators and effects run at 44100
+	// internally — most Buzz machines have hardcoded DSP for that rate.
+	bool shouldResample() const { return needsResampling; }
 	double resampleFracAccum = 0.0;  // fractional sample accumulator
 
 	// Resamplers (per-channel): output upsamplers + input downsamplers (effects)

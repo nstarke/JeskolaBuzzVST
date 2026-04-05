@@ -77,8 +77,8 @@ tresult PLUGIN_API BuzzProcessor::setupProcessing(ProcessSetup& newSetup)
 	// Determine if resampling is needed (host rate differs from Buzz's 44100)
 	updateResamplers();
 
-	// Always tell the Buzz machine it's running at 44100 when resampling
-	double machineRate = needsResampling ? kBuzzMachineRate : newSetup.sampleRate;
+	// Only generators get told 44100; effects get the real host rate
+	double machineRate = shouldResample() ? kBuzzMachineRate : newSetup.sampleRate;
 	if (machineReady) {
 #ifdef BUZZVST_64BIT
 		bridge.SetMasterInfo(125, (int)machineRate, 4);
@@ -110,7 +110,13 @@ void BuzzProcessor::updateResamplers()
 int BuzzProcessor::computeMachineSamples(int hostSamples)
 {
 	double exact = hostSamples * (kBuzzMachineRate / processSetup.sampleRate) + resampleFracAccum;
-	int result = (int)exact;
+	// Always round UP and add 1 safety margin.  The resampler's phase tracking
+	// is independent of this accumulator — if we provide too few machine samples,
+	// the resampler inserts zeros for the missing input, creating a periodic
+	// click at the block rate that downstream effects amplify into an audible tone.
+	// The +1 margin ensures the resampler never runs out.  The fractional
+	// accumulator goes slightly negative, self-correcting on subsequent blocks.
+	int result = (int)ceil(exact) + 1;
 	if (result < 1) result = 1;
 	resampleFracAccum = exact - result;
 	return result;
@@ -210,7 +216,7 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	float* resOutPtrs[2] = {};
 	float* resInPtrs[2] = {};
 
-	if (needsResampling) {
+	if (shouldResample()) {
 		machineSamples = computeMachineSamples(data.numSamples);
 
 		// Ensure intermediate buffers are large enough
@@ -249,6 +255,21 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	int32 samplesRemaining = processSamples;
 	int32 offset = 0;
 
+	// --- Chunk loop diagnostics for effects ---
+	{
+		static int chunkDiagCounter = 0;
+		if (machineType == MT_EFFECT && (chunkDiagCounter == 0 || chunkDiagCounter % 500 == 0)) {
+			char dbg[512];
+			snprintf(dbg, sizeof(dbg),
+				"[BuzzBridgeEffect CHUNK] hostSamples=%d processSamples=%d shouldResample=%d "
+				"samplesUntilNextTick=%d firstTick=%d hostRate=%.0f\n",
+				data.numSamples, processSamples, (int)shouldResample(),
+				samplesUntilNextTick, (int)firstTick, processSetup.sampleRate);
+			OutputDebugStringA(dbg);
+		}
+		chunkDiagCounter++;
+	}
+
 	// Compute samples per tick (at machine rate when resampling)
 	int32 samplesPerTick;
 #ifdef BUZZVST_64BIT
@@ -258,7 +279,7 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 			bpm = data.processContext->tempo;
 		if (bpm < 16) bpm = 125;
 		int tpb = 4;
-		double rate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+		double rate = shouldResample() ? kBuzzMachineRate : processSetup.sampleRate;
 		samplesPerTick = (int32)((60.0 * rate) / (bpm * tpb));
 		if (samplesPerTick < 1) samplesPerTick = 1;
 	}
@@ -385,7 +406,7 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	}
 
 	// --- Resampling postamble: upsample machine-rate output to host rate ---
-	if (needsResampling) {
+	if (shouldResample()) {
 		resamplerOutL.process(resOutPtrs[0], machineSamples, hostOutputs[0], data.numSamples);
 		if (numOutputChannels >= 2 && hostOutputs[1]) {
 			resamplerOutR.process(resOutPtrs[1], machineSamples, hostOutputs[1], data.numSamples);
@@ -830,8 +851,8 @@ void BuzzProcessor::updateMasterInfo(ProcessContext* ctx)
 
 	int tpb = 4;
 	int ibpm = (int)bpm;
-	// Always tell the machine 44100 when resampling
-	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	// Generators get 44100; effects get the real host rate
+	double machineRate = shouldResample() ? kBuzzMachineRate : processSetup.sampleRate;
 	int isr = (int)machineRate;
 
 	// Only send when values actually change (avoid IPC overhead on every block)
@@ -910,7 +931,8 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	}
 
 	updateResamplers();
-	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	// Always init at 44100 when resampling — all Buzz machines expect this rate.
+	double machineRate = shouldResample() ? kBuzzMachineRate : processSetup.sampleRate;
 	bridge.SetMasterInfo(125, (int)machineRate, 4);
 
 	if (!bridge.InitMachine()) {
@@ -1098,7 +1120,7 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	machineFlags = info->Flags;
 
 	updateResamplers();
-	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	double machineRate = shouldResample() ? kBuzzMachineRate : processSetup.sampleRate;
 	loader.UpdateMasterInfo(125.0, machineRate);
 
 	if (!loader.InitMachine()) {

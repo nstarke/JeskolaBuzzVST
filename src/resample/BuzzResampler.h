@@ -2,7 +2,9 @@
 
 // Streaming sample-rate converter for bridging Buzz machines (44100 Hz) to
 // arbitrary VST host sample rates.  Uses cubic Hermite (Catmull-Rom)
-// interpolation with a cascaded biquad anti-alias filter for downsampling.
+// interpolation with:
+//   - Anti-alias filter (pre-interpolation lowpass) when downsampling
+//   - Anti-imaging filter (post-interpolation lowpass) when upsampling
 //
 // The resampler maintains phase and filter state between process() calls,
 // producing seamless audio across block boundaries.
@@ -48,8 +50,17 @@ struct Biquad {
 };
 
 // Streaming resampler: converts srcRate audio to dstRate audio using cubic
-// Hermite interpolation.  When downsampling (srcRate > dstRate), a 4th-order
-// Butterworth anti-alias filter is applied to the source before interpolation.
+// Hermite interpolation with proper filtering for both directions:
+//
+//   Downsampling (srcRate > dstRate):
+//     Anti-alias filter applied to source BEFORE interpolation.
+//     Prevents frequencies above the destination Nyquist from aliasing.
+//
+//   Upsampling (srcRate < dstRate):
+//     Anti-imaging filter applied to output AFTER interpolation.
+//     Removes spectral images that cubic interpolation doesn't fully suppress.
+//     Without this, images of e.g. a 15kHz tone at 29.1kHz alias to 18.9kHz
+//     at 48kHz, creating audible metallic/robotic artifacts.
 class BuzzResampler {
 public:
 	BuzzResampler() = default;
@@ -60,13 +71,22 @@ public:
 		memset(hist_, 0, sizeof(hist_));
 		active_ = true;
 
-		// Anti-alias filter for downsampling (cascade of two 2nd-order sections
-		// gives a 4th-order Butterworth at 90% of destination Nyquist)
+		// Anti-alias filter for downsampling: lowpass at destination Nyquist,
+		// applied at source rate (before interpolation)
 		antiAlias_ = (srcRate > dstRate);
 		if (antiAlias_) {
 			double cutoff = (dstRate * 0.5) * 0.9;
 			aa1_ = Biquad::lowpass(srcRate, cutoff);
 			aa2_ = Biquad::lowpass(srcRate, cutoff);
+		}
+
+		// Anti-imaging filter for upsampling: lowpass at source Nyquist,
+		// applied at destination rate (after interpolation)
+		antiImage_ = (srcRate < dstRate);
+		if (antiImage_) {
+			double cutoff = (srcRate * 0.5) * 0.9;
+			ai1_ = Biquad::lowpass(dstRate, cutoff);
+			ai2_ = Biquad::lowpass(dstRate, cutoff);
 		}
 	}
 
@@ -74,6 +94,7 @@ public:
 		phase_ = 0.0;
 		memset(hist_, 0, sizeof(hist_));
 		if (antiAlias_) { aa1_.reset(); aa2_.reset(); }
+		if (antiImage_) { ai1_.reset(); ai2_.reset(); }
 	}
 
 	bool isActive() const { return active_; }
@@ -102,7 +123,12 @@ public:
 			float c1 = 0.5f * (hist_[2] - hist_[0]);
 			float c2 = hist_[0] - 2.5f * hist_[1] + 2.0f * hist_[2] - 0.5f * hist_[3];
 			float c3 = 0.5f * (hist_[3] - hist_[0]) + 1.5f * (hist_[1] - hist_[2]);
-			output[o] = ((c3 * t + c2) * t + c1) * t + c0;
+			float sample = ((c3 * t + c2) * t + c1) * t + c0;
+
+			// Anti-imaging filter: remove spectral images after interpolation
+			if (antiImage_) { sample = ai1_.process(sample); sample = ai2_.process(sample); }
+
+			output[o] = sample;
 
 			phase_ += ratio_;
 		}
@@ -115,8 +141,10 @@ private:
 	double phase_  = 0.0;
 	float  hist_[4] = {};
 	bool   active_    = false;
-	bool   antiAlias_ = false;
-	Biquad aa1_, aa2_;
+	bool   antiAlias_ = false;   // downsampling: pre-interpolation lowpass
+	bool   antiImage_ = false;   // upsampling: post-interpolation lowpass
+	Biquad aa1_, aa2_;           // anti-alias (4th-order Butterworth)
+	Biquad ai1_, ai2_;           // anti-imaging (4th-order Butterworth)
 };
 
 } // namespace BuzzVst
