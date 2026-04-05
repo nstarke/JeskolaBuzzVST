@@ -20,13 +20,13 @@ Testing 124 generators, 372 effects (skipped 22 VST/Peer)
   Climox Breaker v1.0                      NO AUDIO
   CyanPhase DTMF-1                         NO AUDIO
   Elenzil Frequency Bomb                   TIMEOUT (10s)
-  ErsBlipp                                 NO AUDIO
-  ErsClaves                                NO AUDIO
-  ErsCowbell                               NO AUDIO
-  ErsCymbal                                NO AUDIO
-  ErsHihat                                 NO AUDIO
+  ErsBlipp                                 OK (max=4982.3)
+  ErsClaves                                OK (max=8637.3)
+  ErsCowbell                               OK (max=8331.1)
+  ErsCymbal                                OK (max=8146.2)
+  ErsHihat                                 OK (max=9558.9)
   ErsKick                                  OK (max=10138.7)
-  ErsSnare                                 NO AUDIO
+  ErsSnare                                 OK (max=24749.3)
   FSM ArpMan                               OK (max=57.7)
   FSM Infector                             OK (max=280.2)
   FSM Kick                                 NO AUDIO
@@ -80,12 +80,12 @@ Testing 124 generators, 372 effects (skipped 22 VST/Peer)
   Rout SoundFont Loader                    NO AUDIO
   Ruff Speccy II                           ERROR (code=-1073740791)
   Rymix KyrieSpectra                       ERROR (code=-1073740791)
-  Saxpy's HT-700                           OK (max=3039.0)
+  Saxpy's HT-700                           OK (max=3031.5)
   Sgorpi Clap                              NO AUDIO
   Sgorpi's Mean Bassdrum Machine           NO AUDIO
   SuperDonut Ultimate Drum                 NO AUDIO
   Synthrom Sinus v2.0                      NO AUDIO
-  TEH NOISEMAKING                          OK (max=49197.0)
+  TEH NOISEMAKING                          OK (max=49118.5)
   WhiteNoise Scratcher                     NO AUDIO
   Zephod & Thevider WaveEdit               NO AUDIO
   Zephod Blok2009                          OK (max=2156.2)
@@ -257,8 +257,8 @@ size of version 4 soun)
   Frequency UnKnown Class B                OK (max=3383.5)
   Frequency UnKnown Freq Out               OK (max=16383.9)
   Frequency UnKnown THCMA                  OK (max=0.0)
-  Fuzzpilz Chorpse                         OK (max=8383.7)
-  Fuzzpilz Chorpse Senior                  OK (max=3219.4)
+  Fuzzpilz Chorpse                         OK (max=10212.5)
+  Fuzzpilz Chorpse Senior                  OK (max=10872.5)
   Fuzzpilz Clipper                         OK (max=16383.9)
   Fuzzpilz Drink                           OK (max=16383.9)
   Fuzzpilz Eff Emm                         OK (max=32767.9)
@@ -514,9 +514,9 @@ size of version 4 soun)
   ld grain fx                              NO AUDIO
 
 ========================================
-Results: 355/496 passed
-  Audio OK:    355
-  No audio:    120
+Results: 361/496 passed
+  Audio OK:    361
+  No audio:    114
   Load failed: 1
   Init failed: 0
   Crashed:     16
@@ -541,12 +541,6 @@ Failed machines:
   [GEN] Climox Breaker v1.0                      NO AUDIO
   [GEN] CyanPhase DTMF-1                         NO AUDIO
   [GEN] Elenzil Frequency Bomb                   TIMEOUT
-  [GEN] ErsBlipp                                 NO AUDIO
-  [GEN] ErsClaves                                NO AUDIO
-  [GEN] ErsCowbell                               NO AUDIO
-  [GEN] ErsCymbal                                NO AUDIO
-  [GEN] ErsHihat                                 NO AUDIO
-  [GEN] ErsSnare                                 NO AUDIO
   [GEN] FSM Kick                                 NO AUDIO
   [GEN] Frequency UnKnown Freq In                NO AUDIO
   [GEN] Frequency UnKnown Mr Brown               NO AUDIO

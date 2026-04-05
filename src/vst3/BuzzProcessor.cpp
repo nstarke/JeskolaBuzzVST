@@ -488,13 +488,25 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 			}
 		}
 	}
+	// Fallback: for machines without pt_note, use pt_switch trigger
+	else if (bridgeTrackTrigSlot >= 0 && numTracks > 0 && !currentTrackValues.empty()) {
+		auto& tv = currentTrackValues[0];
+		auto& tp = trackParamChanged[0];
+		if (bridgeTrackTrigSlot < (int)tv.size()) {
+			// Write 1 on note-on, NoValue on note-off
+			if (buzzNote != NOTE_OFF && buzzNote != NOTE_NO) {
+				tv[bridgeTrackTrigSlot] = 1;
+				tp[bridgeTrackTrigSlot] = true;
+			}
+		}
+	}
 
 	{
 		static int noteLogCount = 0;
 		if (noteLogCount++ < 5) {
 			char dbg[256];
-			snprintf(dbg, sizeof(dbg), "[BuzzBridge] writeNoteToParams: buzzNote=%d vel=%d gSlot=%d tSlot=%d\n",
-				buzzNote, velocity, bridgeGlobalNoteSlot, bridgeTrackNoteSlot);
+			snprintf(dbg, sizeof(dbg), "[BuzzBridge] writeNoteToParams: buzzNote=%d vel=%d gSlot=%d tSlot=%d tTrig=%d\n",
+				buzzNote, velocity, bridgeGlobalNoteSlot, bridgeTrackNoteSlot, bridgeTrackTrigSlot);
 			OutputDebugStringA(dbg);
 		}
 	}
@@ -531,10 +543,12 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 	if (numTracks > 0 && !currentTrackValues.empty()) {
 		auto& tv = currentTrackValues[0];
 		auto& tp = trackParamChanged[0];
+		bool foundNote = false;
 		for (int j = 0; j < (int)tSlots.size() && j < (int)tv.size(); j++) {
 			if (tSlots[j].param->Type == pt_note) {
 				tv[j] = buzzNote;
 				tp[j] = true;
+				foundNote = true;
 
 				if (velocity >= 0 && buzzNote != NOTE_OFF) {
 					int velSlot = FindVelocitySlot(tSlots, j);
@@ -549,6 +563,17 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 					}
 				}
 				break;
+			}
+		}
+		// Fallback: for machines without pt_note, use pt_switch trigger
+		if (!foundNote && buzzNote != NOTE_OFF && buzzNote != NOTE_NO) {
+			for (int j = 0; j < (int)tSlots.size() && j < (int)tv.size(); j++) {
+				if (tSlots[j].param->Type == pt_switch &&
+				    tSlots[j].param->MinValue == 1 && tSlots[j].param->MaxValue == 1) {
+					tv[j] = 1;
+					tp[j] = true;
+					break;
+				}
 			}
 		}
 	}
@@ -837,6 +862,7 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	bridgeGlobalVelSlot = -1;
 	bridgeTrackNoteSlot = -1;
 	bridgeTrackVelSlot = -1;
+	bridgeTrackTrigSlot = -1;
 
 	for (int i = 0; i < numGlobal; i++) {
 		if (paramInfos[i].type == pt_note) {
@@ -857,11 +883,21 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 			break;
 		}
 	}
+	// If no pt_note found, look for a pt_switch trigger param in tracks
+	if (bridgeTrackNoteSlot < 0 && bridgeGlobalNoteSlot < 0) {
+		for (int i = 0; i < numTrackParams; i++) {
+			auto& pi = paramInfos[numGlobal + i];
+			if (pi.type == pt_switch && pi.minValue == 1 && pi.maxValue == 1) {
+				bridgeTrackTrigSlot = i;
+				break;
+			}
+		}
+	}
 
 	{
 		char dbg[256];
-		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Note slots: gNote=%d gVel=%d tNote=%d tVel=%d\n",
-			bridgeGlobalNoteSlot, bridgeGlobalVelSlot, bridgeTrackNoteSlot, bridgeTrackVelSlot);
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Note slots: gNote=%d gVel=%d tNote=%d tVel=%d tTrig=%d\n",
+			bridgeGlobalNoteSlot, bridgeGlobalVelSlot, bridgeTrackNoteSlot, bridgeTrackVelSlot, bridgeTrackTrigSlot);
 		OutputDebugStringA(dbg);
 
 		// Dump all params for debugging sample-based machines

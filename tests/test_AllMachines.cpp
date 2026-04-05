@@ -65,20 +65,35 @@ static int testOneGenerator(const char* dllPath) {
     if (machine->TrackVals && !tSlots.empty())
         layout->WriteTrackAllNoValues(machine->TrackVals, 1);
 
+    bool noteTriggered = false;
     for (int i = 0; i < (int)tSlots.size(); i++) {
         if (tSlots[i].param->Type == pt_note) {
             layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51);
             if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte)
                 layout->WriteTrackParam(machine->TrackVals, 0, i + 1, tSlots[i+1].param->MaxValue);
+            noteTriggered = true;
             break;
         }
     }
-    for (int i = 0; i < (int)gSlots.size(); i++) {
-        if (gSlots[i].param->Type == pt_note && machine->GlobalVals) {
-            layout->WriteGlobalParam(machine->GlobalVals, i, 0x51);
-            if (i + 1 < (int)gSlots.size() && gSlots[i+1].param->Type == pt_byte)
-                layout->WriteGlobalParam(machine->GlobalVals, i + 1, gSlots[i+1].param->MaxValue);
-            break;
+    if (!noteTriggered) {
+        for (int i = 0; i < (int)gSlots.size(); i++) {
+            if (gSlots[i].param->Type == pt_note && machine->GlobalVals) {
+                layout->WriteGlobalParam(machine->GlobalVals, i, 0x51);
+                if (i + 1 < (int)gSlots.size() && gSlots[i+1].param->Type == pt_byte)
+                    layout->WriteGlobalParam(machine->GlobalVals, i + 1, gSlots[i+1].param->MaxValue);
+                noteTriggered = true;
+                break;
+            }
+        }
+    }
+    // Fallback: trigger pt_switch params (machines like ErsBlipp use Trig switch)
+    if (!noteTriggered) {
+        for (int i = 0; i < (int)tSlots.size(); i++) {
+            if (tSlots[i].param->Type == pt_switch &&
+                tSlots[i].param->MinValue == 1 && tSlots[i].param->MaxValue == 1) {
+                layout->WriteTrackParam(machine->TrackVals, 0, i, 1);
+                break;
+            }
         }
     }
     SEH_Call([&]() { machine->Tick(); });
