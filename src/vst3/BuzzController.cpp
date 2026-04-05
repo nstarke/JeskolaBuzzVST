@@ -28,36 +28,47 @@ BuzzController::~BuzzController()
 
 void BuzzController::initPreallocatedParams()
 {
-	// Pre-allocate global parameter slots.
-	// Use kIsHidden | kIsReadOnly so they don't appear in automation/MIDI lists.
-	// Active params will be revealed with kCanAutomate when a machine loads.
+	// Pre-allocate global parameter slots with kCanAutomate so they appear
+	// in the host's automation/MIDI CC assignment lists immediately.
+	// Some hosts cache the parameter list at init and ignore restartComponent,
+	// so we must register them as automatable from the start.
+	// Names are placeholders until a machine is loaded.
 	for (int i = 0; i < kMaxGlobalParams; i++) {
 		Steinberg::Vst::String128 name16;
-		Steinberg::UString(name16, 128).fromAscii("");
+		char slotName[32];
+		snprintf(slotName, sizeof(slotName), "Param %d", i + 1);
+		Steinberg::UString(name16, 128).fromAscii(slotName);
 
 		Steinberg::Vst::String128 units;
 		units[0] = 0;
 
 		parameters.addParameter(
 			name16, units, 0, 0.0,
-			ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly,
+			ParameterInfo::kCanAutomate,
 			kBuzzGlobalParamBase + i
 		);
 	}
 
-	// Pre-allocate track parameter slots for all tracks
+	// Pre-allocate track parameter slots for all tracks.
+	// Track 0 params are always kCanAutomate (for MIDI CC mapping).
+	// Other tracks start hidden and are revealed when tracks are added.
 	for (int t = 0; t < kMaxTracks; t++) {
 		for (int i = 0; i < kMaxTrackParams; i++) {
 			Steinberg::Vst::String128 name16;
-			Steinberg::UString(name16, 128).fromAscii("");
+			char slotName[32];
+			snprintf(slotName, sizeof(slotName), "T%d Param %d", t, i + 1);
+			Steinberg::UString(name16, 128).fromAscii(slotName);
 
 			Steinberg::Vst::String128 units;
 			units[0] = 0;
 
 			ParamID paramId = kBuzzTrackParamBase + t * kTrackParamStride + i;
+			int32 flags = (t == 0)
+				? ParameterInfo::kCanAutomate
+				: (ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly);
 			parameters.addParameter(
 				name16, units, 0, 0.0,
-				ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly,
+				flags,
 				paramId
 			);
 		}
@@ -135,7 +146,7 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 		// Retry deferred restartComponent if the host rejected it during init
 		if (pendingParamRestart && componentHandler) {
 			OutputDebugStringA("[BuzzBridge] Controller: retrying deferred restartComponent\n");
-			tresult rr = componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
+			tresult rr = componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 			char dbg[128];
 			snprintf(dbg, sizeof(dbg), "[BuzzBridge] Controller: deferred restartComponent returned %d\n", (int)rr);
 			OutputDebugStringA(dbg);
@@ -211,7 +222,7 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 
 			// Tell host params changed (new track params revealed/hidden)
 			if (componentHandler) {
-				componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
+				componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 			}
 		};
 
@@ -397,7 +408,7 @@ void BuzzController::onDllPathSelected(const std::string& path)
 	}
 
 	if (paramsLoaded && componentHandler) {
-		componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
+		componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 	}
 }
 
@@ -482,6 +493,7 @@ tresult PLUGIN_API BuzzController::setComponentState(IBStream* state)
 
 	// Step 3: Apply saved parameter values (overwriting defaults)
 	if (pInfo) {
+		// 32-bit mode: pInfo is available, apply immediately
 		BuzzParamLayout layout;
 		layout.Build(pInfo);
 		auto& gSlots = layout.GetGlobalSlots();
@@ -500,6 +512,22 @@ tresult PLUGIN_API BuzzController::setComponentState(IBStream* state)
 				double normalized = ParameterMapping::BuzzToNormalized(savedTrackValues[t][i], tSlots[i].param);
 				setParamNormalized(paramId, normalized);
 			}
+		}
+	} else if (!savedGlobalValues.empty() || !savedTrackValues.empty()) {
+		// 64-bit mode: can't load the 32-bit DLL to get param info.
+		// Defer value restoration until BuzzMachineLoaded message arrives
+		// with the param info from the bridge host.
+		OutputDebugStringA("[BuzzBridge] setComponentState: deferring param value restoration (no pInfo)\n");
+		deferredGlobalValues = savedGlobalValues;
+		deferredTrackValues = savedTrackValues;
+		hasDeferredParamValues = true;
+
+		// If BuzzMachineLoaded already arrived (params configured), apply now.
+		// This handles the case where sendMessage is synchronous and the
+		// message was delivered during processor->setState, before this runs.
+		if (activeGlobalParams > 0 || activeTrackParams > 0) {
+			OutputDebugStringA("[BuzzBridge] setComponentState: params already configured, applying immediately\n");
+			applyDeferredParamValues();
 		}
 	}
 
@@ -623,6 +651,8 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 					int initTracks = std::max(1, (int)minT);
 					activeGlobalParams = globalCount;
 					activeTrackParams = trackCount;
+					paramMinValues.clear();
+					paramMinValues.resize(globalCount + trackCount, 0);
 
 					for (int32_t p = 0; p < totalParams && ptr + 28 <= end; p++) {
 						int32_t type = *(const int32_t*)ptr; ptr += 4;
@@ -644,6 +674,10 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 						if (stepCount > 0 && (fl & MPF_STATE)) {
 							defaultNorm = (double)(dv - mn) / (double)stepCount;
 						}
+
+						// Cache min value for Buzz-to-normalized conversion
+						if (p < (int)paramMinValues.size())
+							paramMinValues[p] = mn;
 
 						if (p < globalCount) {
 							// Global param
@@ -679,6 +713,39 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 					}
 
 					OutputDebugStringA("[BuzzBridge] Controller: configured params from processor message\n");
+				}
+
+				// Decode value descriptions blob
+				paramValueDescs.clear();
+				const void* descData = nullptr;
+				Steinberg::uint32 descSize = 0;
+				if (message->getAttributes()->getBinary("ValueDescs", descData, descSize) == kResultOk && descSize >= 4) {
+					const char* dp = (const char*)descData;
+					const char* dend = dp + descSize;
+					int32_t numEntries = *(const int32_t*)dp; dp += 4;
+
+					for (int32_t e = 0; e < numEntries && dp + 8 <= dend; e++) {
+						int32_t paramIdx = *(const int32_t*)dp; dp += 4;
+						int32_t numVals = *(const int32_t*)dp; dp += 4;
+						std::vector<std::string> descs(numVals);
+						for (int32_t v = 0; v < numVals && dp + 4 <= dend; v++) {
+							int32_t dLen = *(const int32_t*)dp; dp += 4;
+							if (dLen > 0 && dLen < 256 && dp + dLen <= dend) {
+								descs[v] = std::string(dp, dLen);
+								dp += dLen;
+							}
+						}
+						paramValueDescs[paramIdx] = descs;
+					}
+
+					char dbg[128];
+					snprintf(dbg, sizeof(dbg), "[BuzzBridge] Controller: decoded %d value description entries\n", (int)paramValueDescs.size());
+					OutputDebugStringA(dbg);
+				}
+
+				// Apply deferred param values from setComponentState (64-bit mode)
+				if (hasDeferredParamValues) {
+					applyDeferredParamValues();
 				}
 
 				// Store track counts for later use (createView, deferred update)
@@ -755,20 +822,23 @@ tresult PLUGIN_API BuzzController::notify(IMessage* message)
 
 void BuzzController::resetParameters()
 {
-	// Reset all pre-allocated params back to hidden
+	// Reset global params back to placeholder names (keep kCanAutomate)
 	for (int i = 0; i < kMaxGlobalParams; i++) {
 		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
 		if (param) {
 			ParameterInfo& info = param->getInfo();
-			info.flags = ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly;
+			info.flags = ParameterInfo::kCanAutomate;
 			info.stepCount = 0;
 			info.defaultNormalizedValue = 0.0;
-			Steinberg::UString(info.title, 128).fromAscii("");
+			char slotName[32];
+			snprintf(slotName, sizeof(slotName), "Param %d", i + 1);
+			Steinberg::UString(info.title, 128).fromAscii(slotName);
 			info.shortTitle[0] = 0;
 			info.units[0] = 0;
 		}
 	}
 
+	// Reset track params: track 0 keeps kCanAutomate, others stay hidden
 	for (int t = 0; t < kMaxTracks; t++) {
 		for (int i = 0; i < kMaxTrackParams; i++) {
 			ParamID paramId = kBuzzTrackParamBase + t * kTrackParamStride + i;
@@ -776,7 +846,9 @@ void BuzzController::resetParameters()
 			if (!param) continue;
 
 			ParameterInfo& info = param->getInfo();
-			info.flags = ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly;
+			info.flags = (t == 0)
+				? ParameterInfo::kCanAutomate
+				: (ParameterInfo::kIsHidden | ParameterInfo::kIsReadOnly);
 			info.stepCount = 0;
 			info.defaultNormalizedValue = 0.0;
 
@@ -870,6 +942,17 @@ bool BuzzController::loadMachineParameters(const std::string& path)
 	if (activeGlobalParams > kMaxGlobalParams)
 		activeGlobalParams = kMaxGlobalParams;
 
+	// Cache min values for Buzz-to-normalized conversion
+	{
+		auto& ts = layout.GetTrackSlots();
+		paramMinValues.clear();
+		paramMinValues.resize(activeGlobalParams + (int)ts.size(), 0);
+		for (int i = 0; i < activeGlobalParams; i++)
+			paramMinValues[i] = gSlots[i].param->MinValue;
+		for (int i = 0; i < (int)ts.size(); i++)
+			paramMinValues[activeGlobalParams + i] = ts[i].param->MinValue;
+	}
+
 	for (int i = 0; i < activeGlobalParams; i++) {
 		const CMachineParameter* bp = gSlots[i].param;
 		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
@@ -945,7 +1028,7 @@ bool BuzzController::loadMachineParameters(const std::string& path)
 //------------------------------------------------------------------------
 // IMidiMapping - maps MIDI CC numbers to Buzz parameter IDs.
 // This allows DAWs to route MIDI CC knobs/faders to the machine's parameters.
-// The mapping is sequential: CC0 -> first global param, CC1 -> second, etc.
+// The mapping is sequential: global params first, then track 0's params.
 //------------------------------------------------------------------------
 tresult PLUGIN_API BuzzController::getMidiControllerAssignment(
 	int32 busIndex, int16 /*channel*/,
@@ -954,10 +1037,23 @@ tresult PLUGIN_API BuzzController::getMidiControllerAssignment(
 	if (busIndex != 0)
 		return kResultFalse;
 
-	// Map standard CCs (0-127) to global parameters sequentially
-	if (midiControllerNumber < 128 && midiControllerNumber < activeGlobalParams) {
-		id = kBuzzGlobalParamBase + midiControllerNumber;
-		return kResultTrue;
+	// Map CCs 0-127 to pre-allocated parameter slots.
+	// Hosts may cache this mapping at init time (before a machine is loaded),
+	// so we always map to all slots. CC 0-63 -> global params, CC 64-127 -> track 0 params.
+	// Hidden/inactive params won't do anything until a machine reveals them.
+	static const int kGlobalCCCount = 64;
+
+	if (midiControllerNumber < 128) {
+		int cc = (int)midiControllerNumber;
+		if (cc < kGlobalCCCount) {
+			id = kBuzzGlobalParamBase + cc;
+			return kResultTrue;
+		}
+		int trackCC = cc - kGlobalCCCount;
+		if (trackCC < kMaxTrackParams) {
+			id = kBuzzTrackParamBase + trackCC; // track 0
+			return kResultTrue;
+		}
 	}
 
 	return kResultFalse;
@@ -999,7 +1095,10 @@ void BuzzController::pushParamInfoToView()
 		Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
 		pvi.name = nameBuf;
 		pvi.stepCount = pinfo.stepCount;
+		pvi.minValue = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
 		pvi.normalizedValue = param->getNormalized();
+		auto descIt = paramValueDescs.find(i);
+		if (descIt != paramValueDescs.end()) pvi.valueDescriptions = descIt->second;
 		infos.push_back(pvi);
 	}
 
@@ -1020,7 +1119,11 @@ void BuzzController::pushParamInfoToView()
 			Steinberg::UString(pinfo.title, 128).toAscii(nameBuf, sizeof(nameBuf));
 			pvi.name = nameBuf;
 			pvi.stepCount = pinfo.stepCount;
+			int flatIdx = activeGlobalParams + i;
+			pvi.minValue = (flatIdx < (int)paramMinValues.size()) ? paramMinValues[flatIdx] : 0;
 			pvi.normalizedValue = param->getNormalized();
+			auto descIt = paramValueDescs.find(flatIdx);
+			if (descIt != paramValueDescs.end()) pvi.valueDescriptions = descIt->second;
 			infos.push_back(pvi);
 		}
 	}
@@ -1050,7 +1153,7 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 		}
 		pushParamInfoToView();
 		if (componentHandler) {
-			componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged);
+			componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 		}
 		pendingParamRestart = false;
 	};
@@ -1064,6 +1167,61 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 		// Return true to stop timer if we got an update
 		return !pendingParamRestart;
 	};
+}
+
+void BuzzController::applyDeferredParamValues()
+{
+	if (!hasDeferredParamValues) return;
+	hasDeferredParamValues = false;
+
+	OutputDebugStringA("[BuzzBridge] Controller: applying deferred param values\n");
+
+	// Apply deferred global values
+	for (int i = 0; i < (int)deferredGlobalValues.size() && i < activeGlobalParams; i++) {
+		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+		if (!param) continue;
+		int stepCount = param->getInfo().stepCount;
+		if (stepCount <= 0) continue;
+		int mn = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
+		double normalized = (double)(deferredGlobalValues[i] - mn) / (double)stepCount;
+		if (normalized < 0.0) normalized = 0.0;
+		if (normalized > 1.0) normalized = 1.0;
+		setParamNormalized(kBuzzGlobalParamBase + i, normalized);
+	}
+
+	// Apply deferred track values
+	for (int t = 0; t < (int)deferredTrackValues.size(); t++) {
+		for (int i = 0; i < (int)deferredTrackValues[t].size() && i < activeTrackParams; i++) {
+			ParamID paramId = kBuzzTrackParamBase + t * kTrackParamStride + i;
+			Parameter* param = parameters.getParameter(paramId);
+			if (!param) continue;
+			int stepCount = param->getInfo().stepCount;
+			if (stepCount <= 0) continue;
+			int mn = (activeGlobalParams + i < (int)paramMinValues.size())
+				? paramMinValues[activeGlobalParams + i] : 0;
+			double normalized = (double)(deferredTrackValues[t][i] - mn) / (double)stepCount;
+			if (normalized < 0.0) normalized = 0.0;
+			if (normalized > 1.0) normalized = 1.0;
+			setParamNormalized(paramId, normalized);
+		}
+	}
+
+	deferredGlobalValues.clear();
+	deferredTrackValues.clear();
+
+	char dbg[128];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridge] Controller: deferred params applied (g=%d t=%d)\n",
+		activeGlobalParams, activeTrackParams);
+	OutputDebugStringA(dbg);
+
+	// Tell the host to re-read parameter values from the controller.
+	// Without this, the host uses stale defaults and pushes them to the
+	// processor, overwriting the correct values restored in setState.
+	if (componentHandler) {
+		tresult rr = componentHandler->restartComponent(kParamValuesChanged);
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Controller: restartComponent(kParamValuesChanged) = %d\n", (int)rr);
+		OutputDebugStringA(dbg);
+	}
 }
 
 tresult PLUGIN_API BuzzController::setParamNormalized(ParamID tag, ParamValue value)

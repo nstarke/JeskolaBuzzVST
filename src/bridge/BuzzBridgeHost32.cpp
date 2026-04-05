@@ -198,23 +198,32 @@ static void HandleTick(uint32_t payloadSize) {
 	int numTrackParams = (int)tSlots.size();
 	int numTracks = g_numTracks;
 
-	// On the first tick after init, let the machine use its constructor defaults.
-	// Writing params (even "default" values from CMachineInfo) overwrites the
-	// machine's internal state and kills audio on many machines.
-	if (g_firstTick) {
-		OutputDebugStringA("[BuzzBridgeHost32] First tick: skipping param writes\n");
-		goto do_tick;
+	// On the first tick after init, let the machine use its constructor defaults
+	// UNLESS the processor sent explicit param values (state restore).
+	// Writing params overwrites the machine's internal state, which kills audio
+	// on many machines when loading fresh. But after a DAW reload, we need to
+	// restore saved values.
+	{
+		bool hasExplicitParams = false;
+		for (auto& p : params) {
+			if (p.paramId < 0) break; // sentinel
+			hasExplicitParams = true;
+			break;
+		}
+		if (g_firstTick && !hasExplicitParams) {
+			OutputDebugStringA("[BuzzBridgeHost32] First tick: skipping param writes (no explicit params)\n");
+			goto do_tick;
+		}
+		if (g_firstTick && hasExplicitParams) {
+			OutputDebugStringA("[BuzzBridgeHost32] First tick: applying explicit params (state restore)\n");
+		}
 	}
 
 	// Reset all params to NoValue before applying changes (standard Buzz convention).
-	// NoValue means "no change" — the machine keeps its previous internal state.
-	// Skip on first tick since we just wrote proper defaults in HandleInitMachine.
-	if (!g_firstTick) {
-		if (machine->GlobalVals)
-			layout->WriteAllNoValues(machine->GlobalVals);
-		if (machine->TrackVals && numTrackParams > 0)
-			layout->WriteTrackAllNoValues(machine->TrackVals, numTracks);
-	}
+	if (machine->GlobalVals)
+		layout->WriteAllNoValues(machine->GlobalVals);
+	if (machine->TrackVals && numTrackParams > 0)
+		layout->WriteTrackAllNoValues(machine->TrackVals, numTracks);
 
 	// Apply changed params.
 	{
@@ -492,6 +501,33 @@ static void HandleSetNumTracks() {
 	g_pipe.SendResponse(kRespOk);
 }
 
+static void HandleDescribeValue() {
+	BridgeDescribeValue dv;
+	if (!g_pipe.ReadAll(&dv, sizeof(dv))) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	auto* machine = g_loader.GetMachine();
+	if (!machine) {
+		g_pipe.SendResponse(kRespError);
+		return;
+	}
+
+	const char* desc = nullptr;
+	SEH_Call([&]() {
+		desc = machine->DescribeValue(dv.param, dv.value);
+	});
+
+	if (desc && desc[0]) {
+		uint32_t len = (uint32_t)strlen(desc);
+		g_pipe.SendResponse(kRespDescribeValue, desc, len);
+	} else {
+		// No description — send empty response
+		g_pipe.SendResponse(kRespDescribeValue, "", 0);
+	}
+}
+
 static void HandleMidiNote() {
 	BridgeMidiNote mn;
 	if (!g_pipe.ReadAll(&mn, sizeof(mn))) {
@@ -712,6 +748,9 @@ static void CommandLoop() {
 			case kCmdSetNumTracks:
 				HandleSetNumTracks();
 				break;
+			case kCmdDescribeValue:
+				HandleDescribeValue();
+				break;
 			case kCmdShutdown:
 				g_pipe.SendResponse(kRespOk);
 				g_running = false;
@@ -756,6 +795,17 @@ int main(int argc, char* argv[])
 			info->Name ? info->Name : "(null)",
 			info->Type, info->numGlobalParameters, info->numTrackParameters,
 			info->minTracks, info->maxTracks, info->numAttributes);
+
+		// Print all parameters
+		int totalParams = info->numGlobalParameters + info->numTrackParameters;
+		for (int i = 0; i < totalParams; i++) {
+			auto* p = info->Parameters[i];
+			const char* group = (i < info->numGlobalParameters) ? "G" : "T";
+			int idx = (i < info->numGlobalParameters) ? i : i - info->numGlobalParameters;
+			printf("  %s[%d] '%s': type=%d min=%d max=%d noVal=%d def=%d flags=0x%x\n",
+				group, idx, p->Name ? p->Name : "?",
+				p->Type, p->MinValue, p->MaxValue, p->NoValue, p->DefValue, p->Flags);
+		}
 
 		loader.UpdateMasterInfo(125.0, 44100.0);
 		printf("Calling InitMachine...\n");

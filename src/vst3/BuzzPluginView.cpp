@@ -927,6 +927,22 @@ LRESULT CALLBACK BuzzPluginView::ParamPanelWndProc(HWND hWnd, UINT msg, WPARAM w
 			int rangeMax = (int)SendMessage(hwndTrackbar, TBM_GETRANGEMAX, 0, 0);
 			double normalized = (rangeMax > 0) ? (double)pos / (double)rangeMax : 0.0;
 
+			// Update value label
+			if (pc.hwndValueLabel) {
+				int rawValue = pc.minValue + pos;
+				int descIdx = rawValue - pc.minValue;
+				if (descIdx >= 0 && descIdx < (int)pc.valueDescriptions.size() &&
+				    !pc.valueDescriptions[descIdx].empty()) {
+					std::wstring wdesc(pc.valueDescriptions[descIdx].begin(),
+					                   pc.valueDescriptions[descIdx].end());
+					SetWindowTextW(pc.hwndValueLabel, wdesc.c_str());
+				} else {
+					wchar_t valBuf[32];
+					swprintf(valBuf, 32, L"%d", rawValue);
+					SetWindowTextW(pc.hwndValueLabel, valBuf);
+				}
+			}
+
 			int code = LOWORD(wParam);
 			if (code == TB_THUMBTRACK || code == TB_THUMBPOSITION) {
 				if (self->onParamBeginEdit)
@@ -1004,11 +1020,17 @@ void BuzzPluginView::createParamControls()
 
 	paramScrollPos = 0;
 
+	int valueLabelWidth = S(70);
+	int adjustedSliderWidth = sliderWidth - valueLabelWidth - margin;
+	if (adjustedSliderWidth < S(50)) adjustedSliderWidth = S(50);
+
 	for (int i = 0; i < (int)paramInfos.size(); i++) {
 		const auto& pi = paramInfos[i];
 		ParamControl pc;
 		pc.paramId = pi.paramId;
 		pc.stepCount = pi.stepCount;
+		pc.minValue = pi.minValue;
+		pc.valueDescriptions = pi.valueDescriptions;
 
 		int y = i * rowHeight;
 
@@ -1023,7 +1045,7 @@ void BuzzPluginView::createParamControls()
 		// Create trackbar
 		pc.hwndTrackbar = CreateWindowExW(0, TRACKBAR_CLASSW, L"",
 			WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
-			labelWidth + margin * 2, y, sliderWidth, rowHeight,
+			labelWidth + margin * 2, y, adjustedSliderWidth, rowHeight,
 			hwndParamPanel, (HMENU)(INT_PTR)(kParamSliderBaseID + i), hInst, nullptr);
 
 		int rangeMax = (pi.stepCount > 0) ? pi.stepCount : 1000;
@@ -1031,6 +1053,28 @@ void BuzzPluginView::createParamControls()
 		SendMessage(pc.hwndTrackbar, TBM_SETRANGEMAX, FALSE, rangeMax);
 		int pos = (int)(pi.normalizedValue * rangeMax + 0.5);
 		SendMessage(pc.hwndTrackbar, TBM_SETPOS, TRUE, pos);
+
+		// Create value label (shows numeric value or description string)
+		int valueLabelX = labelWidth + margin * 2 + adjustedSliderWidth + margin;
+		pc.hwndValueLabel = CreateWindowExW(0, L"STATIC", L"",
+			WS_CHILD | WS_VISIBLE | SS_LEFT | SS_ENDELLIPSIS,
+			valueLabelX, y + S(2), valueLabelWidth, S(16),
+			hwndParamPanel, nullptr, hInst, nullptr);
+		SendMessage(pc.hwndValueLabel, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+
+		// Set initial value text
+		int rawValue = pc.minValue + pos;
+		int descIdx = rawValue - pc.minValue;
+		if (descIdx >= 0 && descIdx < (int)pc.valueDescriptions.size() &&
+		    !pc.valueDescriptions[descIdx].empty()) {
+			std::wstring wdesc(pc.valueDescriptions[descIdx].begin(),
+			                   pc.valueDescriptions[descIdx].end());
+			SetWindowTextW(pc.hwndValueLabel, wdesc.c_str());
+		} else {
+			wchar_t valBuf[32];
+			swprintf(valBuf, 32, L"%d", rawValue);
+			SetWindowTextW(pc.hwndValueLabel, valBuf);
+		}
 
 		paramControls.push_back(pc);
 	}
@@ -1054,6 +1098,7 @@ void BuzzPluginView::destroyParamControls()
 	for (auto& pc : paramControls) {
 		if (pc.hwndLabel) DestroyWindow(pc.hwndLabel);
 		if (pc.hwndTrackbar) DestroyWindow(pc.hwndTrackbar);
+		if (pc.hwndValueLabel) DestroyWindow(pc.hwndValueLabel);
 	}
 	paramControls.clear();
 	paramScrollPos = 0;
@@ -1074,6 +1119,22 @@ void BuzzPluginView::updateParamValue(Steinberg::Vst::ParamID id, double normali
 			int rangeMax = (int)SendMessage(pc.hwndTrackbar, TBM_GETRANGEMAX, 0, 0);
 			int pos = (int)(normalizedValue * rangeMax + 0.5);
 			SendMessage(pc.hwndTrackbar, TBM_SETPOS, TRUE, pos);
+
+			// Update value label
+			if (pc.hwndValueLabel) {
+				int rawValue = pc.minValue + pos;
+				int descIdx = rawValue - pc.minValue;
+				if (descIdx >= 0 && descIdx < (int)pc.valueDescriptions.size() &&
+				    !pc.valueDescriptions[descIdx].empty()) {
+					std::wstring wdesc(pc.valueDescriptions[descIdx].begin(),
+					                   pc.valueDescriptions[descIdx].end());
+					SetWindowTextW(pc.hwndValueLabel, wdesc.c_str());
+				} else {
+					wchar_t valBuf[32];
+					swprintf(valBuf, 32, L"%d", rawValue);
+					SetWindowTextW(pc.hwndValueLabel, valBuf);
+				}
+			}
 			break;
 		}
 	}

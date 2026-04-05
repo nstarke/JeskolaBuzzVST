@@ -247,6 +247,29 @@ bool BridgeClient::SetNumTracks(int numTracks)
 	return SendAndWaitOk(kCmdSetNumTracks, &n, sizeof(n));
 }
 
+bool BridgeClient::LoadWave(int slotIndex, const std::string& wavPath)
+{
+	BridgeLoadWave lw = {};
+	lw.slotIndex = slotIndex;
+	lw.pathLen = (int32_t)wavPath.size();
+
+	// Build payload: BridgeLoadWave struct + path string
+	std::vector<char> payload(sizeof(lw) + wavPath.size());
+	memcpy(payload.data(), &lw, sizeof(lw));
+	memcpy(payload.data() + sizeof(lw), wavPath.c_str(), wavPath.size());
+
+	char dbg[512];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridge64] LoadWave: slot=%d path='%s'\n", slotIndex, wavPath.c_str());
+	OutputDebugStringA(dbg);
+
+	return SendAndWaitOk(kCmdLoadWave, payload.data(), (uint32_t)payload.size());
+}
+
+bool BridgeClient::ClearWaves()
+{
+	return SendAndWaitOk(kCmdClearWaves);
+}
+
 bool BridgeClient::GetMachineInfo(BridgeMachineInfo& info, std::vector<BridgeParamInfo>& params)
 {
 	if (!pipe.IsValid()) return false;
@@ -265,6 +288,26 @@ bool BridgeClient::GetMachineInfo(BridgeMachineInfo& info, std::vector<BridgePar
 	}
 
 	return true;
+}
+
+std::string BridgeClient::DescribeValue(int param, int value)
+{
+	if (!pipe.IsValid()) return "";
+
+	BridgeDescribeValue dv = {};
+	dv.param = param;
+	dv.value = value;
+	if (!pipe.SendCommand(kCmdDescribeValue, &dv, sizeof(dv))) return "";
+
+	BridgeRespHeader resp;
+	if (!pipe.ReadResponse(resp)) return "";
+	if (resp.resp != kRespDescribeValue || resp.payloadSize == 0) return "";
+
+	std::string result(resp.payloadSize, '\0');
+	if (!pipe.ReadAll(&result[0], resp.payloadSize)) return "";
+	// Remove trailing null if present
+	while (!result.empty() && result.back() == '\0') result.pop_back();
+	return result;
 }
 
 BridgeSharedAudio* BridgeClient::GetAudio()

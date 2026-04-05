@@ -63,6 +63,7 @@ enum BridgeCommand : uint32_t {
 	kCmdLoadWave,           // Load a WAV into wave table. Payload: BridgeLoadWave
 	kCmdClearWaves,         // Clear all wave table slots. No payload.
 	kCmdSetNumTracks,       // Set number of active tracks. Payload: int32_t
+	kCmdDescribeValue,      // Get string description for a param value. Payload: BridgeDescribeValue
 	kCmdShutdown,           // Graceful shutdown of the bridge process
 };
 
@@ -71,6 +72,7 @@ enum BridgeResponse : uint32_t {
 	kRespOk = 0,
 	kRespError,
 	kRespMachineInfo,       // Followed by BridgeMachineInfo
+	kRespDescribeValue,     // Followed by null-terminated string
 };
 
 // Wire format for a command header
@@ -141,6 +143,11 @@ struct BridgeWorkCmd {
 struct BridgeLoadWave {
 	int32_t slotIndex;      // 1-based wave slot, or 0 for auto
 	int32_t pathLen;        // Length of file path string (follows this struct)
+};
+
+struct BridgeDescribeValue {
+	int32_t param;          // Parameter index (flat, across global+track)
+	int32_t value;          // Buzz integer value
 };
 
 // Tick data: array of changed param values, terminated by paramId == -1

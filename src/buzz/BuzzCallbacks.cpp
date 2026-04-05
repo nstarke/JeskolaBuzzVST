@@ -18,11 +18,29 @@ BuzzCallbacks::~BuzzCallbacks()
 }
 
 CWaveInfo const *BuzzCallbacks::GetWave(int const i) {
-	if (waveTable) return waveTable->GetWave(i);
+	if (waveTable) {
+		auto* result = waveTable->GetWave(i);
+		static int getWaveLog = 0;
+		if (getWaveLog++ < 10) {
+			char dbg[128];
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] GetWave(%d) -> %p\n", i, (void*)result);
+			OutputDebugStringA(dbg);
+		}
+		return result;
+	}
 	return nullptr;
 }
 CWaveLevel const *BuzzCallbacks::GetWaveLevel(int const i, int const level) {
-	if (waveTable) return waveTable->GetWaveLevel(i, level);
+	if (waveTable) {
+		auto* result = waveTable->GetWaveLevel(i, level);
+		static int getWaveLevelLog = 0;
+		if (getWaveLevelLog++ < 10) {
+			char dbg[128];
+			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] GetWaveLevel(%d, %d) -> %p\n", i, level, (void*)result);
+			OutputDebugStringA(dbg);
+		}
+		return result;
+	}
 	return nullptr;
 }
 

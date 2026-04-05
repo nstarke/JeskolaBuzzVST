@@ -13,6 +13,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <map>
 
 namespace BuzzVst {
 
@@ -95,6 +96,21 @@ private:
 	void checkPendingScanResults();
 
 	bool pendingParamRestart = false;
+
+	// Deferred parameter restoration for 64-bit mode.
+	// setComponentState can't load the 32-bit DLL to get param info,
+	// so we save the raw Buzz values and apply them once BuzzMachineLoaded arrives.
+	std::vector<Steinberg::int32> deferredGlobalValues;
+	std::vector<std::vector<Steinberg::int32>> deferredTrackValues;
+	bool hasDeferredParamValues = false;
+
+	// Cached min values from BuzzMachineLoaded (for Buzz-to-normalized conversion)
+	std::vector<int> paramMinValues; // [0..numGlobal-1] = global, [numGlobal..] = track
+
+	// Value descriptions for enum-like params (keyed by flat param index)
+	std::map<int, std::vector<std::string>> paramValueDescs;
+
+	void applyDeferredParamValues();
 };
 
 class GeneratorController : public BuzzController {

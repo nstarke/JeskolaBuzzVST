@@ -35,7 +35,10 @@ public:
 	bool SendMidiNote(int channel, int note, int velocity);
 	bool SendMidiCC(int controller, int channel, int value);
 	bool SetNumTracks(int numTracks);
+	bool LoadWave(int slotIndex, const std::string& wavPath);
+	bool ClearWaves();
 	bool GetMachineInfo(BridgeMachineInfo& info, std::vector<BridgeParamInfo>& params);
+	std::string DescribeValue(int param, int value);
 
 	// Access shared audio memory
 	BridgeSharedAudio* GetAudio();

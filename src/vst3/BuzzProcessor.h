@@ -94,6 +94,10 @@ protected:
 	std::string dllPath;
 	bool machineReady = false;
 
+	// Wave paths loaded via bridge (for state persistence in 64-bit mode)
+	struct WavePathEntry { int slotIndex; std::string filePath; };
+	std::vector<WavePathEntry> loadedWavePaths;
+
 	// Deferred machine load: notify() sets the path, process() does the actual load.
 	// This avoids race conditions between the UI thread (notify) and audio thread (process).
 	std::string pendingDllPath;
@@ -132,6 +136,11 @@ protected:
 	// Tick timing
 	int samplesUntilNextTick = 0;
 	bool firstTick = true;
+
+	// After setState restores params, ignore host parameter pushes until
+	// the first tick sends the correct values to the machine.  Some hosts
+	// push stale defaults from the controller, overwriting saved values.
+	bool stateJustRestored = false;
 
 	// Bypass
 	bool bBypass = false;
