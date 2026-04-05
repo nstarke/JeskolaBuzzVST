@@ -87,6 +87,7 @@ protected:
 	int bridgeGlobalVelSlot = -1;
 	int bridgeTrackNoteSlot = -1;
 	int bridgeTrackVelSlot = -1;
+	int bridgeTrackTrigSlot = -1; // pt_switch trigger (for machines without pt_note)
 	int bridgeNumGlobalParams = 0;
 	bool ensureBridgeRunning();
 #endif
