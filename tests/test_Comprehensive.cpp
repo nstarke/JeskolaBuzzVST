@@ -164,6 +164,7 @@ TEST(BridgeIPC, CommandEnumValues) {
     ASSERT_EQ((uint32_t)kCmdLoadWave, 13u);
     ASSERT_EQ((uint32_t)kCmdClearWaves, 14u);
     ASSERT_EQ((uint32_t)kCmdSetNumTracks, 15u);
+    ASSERT_EQ((uint32_t)kCmdDescribeValue, 16u);
     ASSERT_EQ((uint32_t)kCmdShutdown, 17u);
 }
 
@@ -171,6 +172,7 @@ TEST(BridgeIPC, ResponseEnumValues) {
     ASSERT_EQ((uint32_t)kRespOk, 0u);
     ASSERT_EQ((uint32_t)kRespError, 1u);
     ASSERT_EQ((uint32_t)kRespMachineInfo, 2u);
+    ASSERT_EQ((uint32_t)kRespDescribeValue, 3u);
 }
 
 // ===========================================================================

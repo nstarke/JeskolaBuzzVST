@@ -165,6 +165,7 @@ if(NOT BUZZVST_64BIT)
         tests/test_Validation.cpp
         tests/test_Comprehensive.cpp
         tests/test_MDK.cpp
+        tests/test_BridgeAndAudio.cpp
     )
 
     add_executable(BuzzBridgeTests
