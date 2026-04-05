@@ -4,6 +4,7 @@
 #include "../buzz/BuzzMachineLoader.h"
 #include "../buzz/BuzzParamLayout.h"
 #include "../common/SEHGuard.h"
+#include "../resample/BuzzResampler.h"
 #include "plugids.h"
 
 #ifdef BUZZVST_64BIT
@@ -150,6 +151,24 @@ protected:
 	// Work buffers for Buzz's 256-sample limit
 	float workBufLeft[MAX_BUFFER_LENGTH];
 	float workBufRight[MAX_BUFFER_LENGTH];
+
+	// ---- Sample-rate conversion (Buzz machines assume 44100 Hz) ----
+	bool needsResampling = false;
+	double resampleFracAccum = 0.0;  // fractional sample accumulator
+
+	// Resamplers (per-channel): output upsamplers + input downsamplers (effects)
+	BuzzResampler resamplerOutL, resamplerOutR;
+	BuzzResampler resamplerInL, resamplerInR;
+
+	// Intermediate buffers for machine-rate audio (allocated when resampling)
+	std::vector<float> resampleBufOutL, resampleBufOutR;
+	std::vector<float> resampleBufInL, resampleBufInR;
+
+	// Compute how many machine-rate samples to generate for a given host block
+	int computeMachineSamples(int hostSamples);
+
+	// Initialise or tear down resamplers based on current host sample rate
+	void updateResamplers();
 };
 
 } // namespace BuzzVst

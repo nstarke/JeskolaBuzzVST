@@ -72,15 +72,48 @@ tresult PLUGIN_API BuzzProcessor::setActive(TBool state)
 
 tresult PLUGIN_API BuzzProcessor::setupProcessing(ProcessSetup& newSetup)
 {
-	// Update master info with the new sample rate
+	tresult result = AudioEffect::setupProcessing(newSetup);
+
+	// Determine if resampling is needed (host rate differs from Buzz's 44100)
+	updateResamplers();
+
+	// Always tell the Buzz machine it's running at 44100 when resampling
+	double machineRate = needsResampling ? kBuzzMachineRate : newSetup.sampleRate;
 	if (machineReady) {
 #ifdef BUZZVST_64BIT
-		bridge.SetMasterInfo(125, (int)newSetup.sampleRate, 4);
+		bridge.SetMasterInfo(125, (int)machineRate, 4);
 #else
-		loader.UpdateMasterInfo(125.0, newSetup.sampleRate);
+		loader.UpdateMasterInfo(125.0, machineRate);
 #endif
 	}
-	return AudioEffect::setupProcessing(newSetup);
+	// Force re-send on next process() so the machine gets the correct rate
+	lastSentSampleRate = 0;
+
+	return result;
+}
+
+void BuzzProcessor::updateResamplers()
+{
+	needsResampling = (std::abs(processSetup.sampleRate - kBuzzMachineRate) > 1.0);
+
+	if (needsResampling) {
+		// Output: upsample machine rate (44100) -> host rate
+		resamplerOutL.init(kBuzzMachineRate, processSetup.sampleRate);
+		resamplerOutR.init(kBuzzMachineRate, processSetup.sampleRate);
+		// Input: downsample host rate -> machine rate (44100) - used by effects
+		resamplerInL.init(processSetup.sampleRate, kBuzzMachineRate);
+		resamplerInR.init(processSetup.sampleRate, kBuzzMachineRate);
+		resampleFracAccum = 0.0;
+	}
+}
+
+int BuzzProcessor::computeMachineSamples(int hostSamples)
+{
+	double exact = hostSamples * (kBuzzMachineRate / processSetup.sampleRate) + resampleFracAccum;
+	int result = (int)exact;
+	if (result < 1) result = 1;
+	resampleFracAccum = exact - result;
+	return result;
 }
 
 tresult PLUGIN_API BuzzProcessor::canProcessSampleSize(int32 symbolicSampleSize)
@@ -158,21 +191,65 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	if (data.numOutputs == 0)
 		return kResultOk;
 
-	float** outputs = data.outputs[0].channelBuffers32;
+	float** hostOutputs = data.outputs[0].channelBuffers32;
 	int32 numOutputChannels = data.outputs[0].numChannels;
 
-	float** inputs = nullptr;
+	float** hostInputs = nullptr;
 	int32 numInputChannels = 0;
 	if (data.numInputs > 0) {
-		inputs = data.inputs[0].channelBuffers32;
+		hostInputs = data.inputs[0].channelBuffers32;
 		numInputChannels = data.inputs[0].numChannels;
 	}
 
+	// --- Resampling preamble: swap to intermediate buffers at machine rate ---
+	float** outputs = hostOutputs;
+	float** inputs = hostInputs;
+	int32 processSamples = data.numSamples;    // samples for the chunk loop
+	int32 machineSamples = 0;                  // only set when resampling
+
+	float* resOutPtrs[2] = {};
+	float* resInPtrs[2] = {};
+
+	if (needsResampling) {
+		machineSamples = computeMachineSamples(data.numSamples);
+
+		// Ensure intermediate buffers are large enough
+		if ((int)resampleBufOutL.size() < machineSamples) {
+			resampleBufOutL.resize(machineSamples);
+			resampleBufOutR.resize(machineSamples);
+		}
+		memset(resampleBufOutL.data(), 0, machineSamples * sizeof(float));
+		memset(resampleBufOutR.data(), 0, machineSamples * sizeof(float));
+		resOutPtrs[0] = resampleBufOutL.data();
+		resOutPtrs[1] = resampleBufOutR.data();
+
+		// Downsample host inputs for effects
+		if (hostInputs && numInputChannels > 0 && hostInputs[0]) {
+			if ((int)resampleBufInL.size() < machineSamples) {
+				resampleBufInL.resize(machineSamples);
+				resampleBufInR.resize(machineSamples);
+			}
+			resInPtrs[0] = resampleBufInL.data();
+			resamplerInL.process(hostInputs[0], data.numSamples, resInPtrs[0], machineSamples);
+			if (numInputChannels >= 2 && hostInputs[1]) {
+				resInPtrs[1] = resampleBufInR.data();
+				resamplerInR.process(hostInputs[1], data.numSamples, resInPtrs[1], machineSamples);
+			} else {
+				memcpy(resampleBufInR.data(), resampleBufInL.data(), machineSamples * sizeof(float));
+				resInPtrs[1] = resampleBufInR.data();
+			}
+			inputs = resInPtrs;
+		}
+
+		outputs = resOutPtrs;
+		processSamples = machineSamples;
+	}
+
 	// Process in chunks, handling tick boundaries and Buzz's 256-sample limit
-	int32 samplesRemaining = data.numSamples;
+	int32 samplesRemaining = processSamples;
 	int32 offset = 0;
 
-	// Compute samples per tick
+	// Compute samples per tick (at machine rate when resampling)
 	int32 samplesPerTick;
 #ifdef BUZZVST_64BIT
 	{
@@ -181,7 +258,8 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 			bpm = data.processContext->tempo;
 		if (bpm < 16) bpm = 125;
 		int tpb = 4;
-		samplesPerTick = (int32)((60.0 * processSetup.sampleRate) / (bpm * tpb));
+		double rate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+		samplesPerTick = (int32)((60.0 * rate) / (bpm * tpb));
 		if (samplesPerTick < 1) samplesPerTick = 1;
 	}
 #else
@@ -304,6 +382,14 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 #ifndef BUZZVST_64BIT
 		loader.GetMasterInfo()->PosInTick += blockSize;
 #endif
+	}
+
+	// --- Resampling postamble: upsample machine-rate output to host rate ---
+	if (needsResampling) {
+		resamplerOutL.process(resOutPtrs[0], machineSamples, hostOutputs[0], data.numSamples);
+		if (numOutputChannels >= 2 && hostOutputs[1]) {
+			resamplerOutR.process(resOutPtrs[1], machineSamples, hostOutputs[1], data.numSamples);
+		}
 	}
 
 	data.outputs[0].silenceFlags = 0;
@@ -744,7 +830,9 @@ void BuzzProcessor::updateMasterInfo(ProcessContext* ctx)
 
 	int tpb = 4;
 	int ibpm = (int)bpm;
-	int isr = (int)processSetup.sampleRate;
+	// Always tell the machine 44100 when resampling
+	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	int isr = (int)machineRate;
 
 	// Only send when values actually change (avoid IPC overhead on every block)
 	if (ibpm == lastSentBpm && isr == lastSentSampleRate && tpb == lastSentTpb)
@@ -757,7 +845,7 @@ void BuzzProcessor::updateMasterInfo(ProcessContext* ctx)
 #ifdef BUZZVST_64BIT
 	bridge.SetMasterInfo(ibpm, isr, tpb);
 #else
-	loader.UpdateMasterInfo(bpm, processSetup.sampleRate, tpb);
+	loader.UpdateMasterInfo(bpm, machineRate, tpb);
 #endif
 }
 
@@ -821,7 +909,9 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 		return false;
 	}
 
-	bridge.SetMasterInfo(125, (int)processSetup.sampleRate, 4);
+	updateResamplers();
+	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	bridge.SetMasterInfo(125, (int)machineRate, 4);
 
 	if (!bridge.InitMachine()) {
 		OutputDebugStringA("[BuzzBridge] loadBuzzMachine: InitMachine failed\n");
@@ -1007,7 +1097,9 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	machineType = info->Type;
 	machineFlags = info->Flags;
 
-	loader.UpdateMasterInfo(125.0, processSetup.sampleRate);
+	updateResamplers();
+	double machineRate = needsResampling ? kBuzzMachineRate : processSetup.sampleRate;
+	loader.UpdateMasterInfo(125.0, machineRate);
 
 	if (!loader.InitMachine()) {
 		loader.Unload();
