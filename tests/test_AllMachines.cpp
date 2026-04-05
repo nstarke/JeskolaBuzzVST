@@ -147,31 +147,51 @@ static int testOneEffect(const char* dllPath) {
     SEH_Call([&]() { machine->Tick(); });
 
     bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
+    bool isMDK = loader.GetCallbacks()->isMDKMachine;
     float maxSample = 0;
 
     for (int block = 0; block < 20; block++) {
-        float bufL[MAX_BUFFER_LENGTH];
-        float bufR[MAX_BUFFER_LENGTH];
-        for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
-            float t = (float)(block * MAX_BUFFER_LENGTH + i) / 44100.0f;
-            bufL[i] = 16384.0f * sinf(2.0f * 3.14159265f * 440.0f * t);
-            bufR[i] = bufL[i];
-        }
-
         bool hasOutput = false;
-        if (monoToStereo) {
-            SEH_Call([&]() { hasOutput = machine->WorkMonoToStereo(bufL, bufR, MAX_BUFFER_LENGTH, WM_READWRITE); });
-        } else {
-            SEH_Call([&]() { hasOutput = machine->Work(bufL, MAX_BUFFER_LENGTH, WM_READWRITE); });
-        }
 
-        if (hasOutput) {
+        if (isMDK) {
+            // MDK machines expect stereo interleaved: [L0,R0,L1,R1,...]
+            float interleaved[MAX_BUFFER_LENGTH * 2];
             for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
-                float a = fabsf(bufL[i]);
-                if (a > maxSample) maxSample = a;
-                if (monoToStereo) {
-                    a = fabsf(bufR[i]);
+                float t = (float)(block * MAX_BUFFER_LENGTH + i) / 44100.0f;
+                float s = 16384.0f * sinf(2.0f * 3.14159265f * 440.0f * t);
+                interleaved[i * 2] = s;
+                interleaved[i * 2 + 1] = s;
+            }
+            SEH_Call([&]() { hasOutput = machine->Work(interleaved, MAX_BUFFER_LENGTH, WM_READWRITE); });
+            if (hasOutput) {
+                for (int i = 0; i < MAX_BUFFER_LENGTH * 2; i++) {
+                    float a = fabsf(interleaved[i]);
                     if (a > maxSample) maxSample = a;
+                }
+            }
+        } else {
+            float bufL[MAX_BUFFER_LENGTH];
+            float bufR[MAX_BUFFER_LENGTH];
+            for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
+                float t = (float)(block * MAX_BUFFER_LENGTH + i) / 44100.0f;
+                bufL[i] = 16384.0f * sinf(2.0f * 3.14159265f * 440.0f * t);
+                bufR[i] = bufL[i];
+            }
+
+            if (monoToStereo) {
+                SEH_Call([&]() { hasOutput = machine->WorkMonoToStereo(bufL, bufR, MAX_BUFFER_LENGTH, WM_READWRITE); });
+            } else {
+                SEH_Call([&]() { hasOutput = machine->Work(bufL, MAX_BUFFER_LENGTH, WM_READWRITE); });
+            }
+
+            if (hasOutput) {
+                for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
+                    float a = fabsf(bufL[i]);
+                    if (a > maxSample) maxSample = a;
+                    if (monoToStereo) {
+                        a = fabsf(bufR[i]);
+                        if (a > maxSample) maxSample = a;
+                    }
                 }
             }
         }
