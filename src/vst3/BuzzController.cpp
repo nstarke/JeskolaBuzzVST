@@ -1229,6 +1229,55 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 	view->onPresetSelected = [this](int presetIndex) {
 		applyPreset(presetIndex);
 	};
+	view->onSavePreset = [this](const std::string& presetName) {
+		if (currentDllPath.empty() || presetName.empty()) return;
+
+		// Build preset from current parameter values
+		BuzzPreset preset;
+		preset.name = presetName;
+
+		// Collect state param values (globals then tracks)
+		for (int i = 0; i < activeGlobalParams; i++) {
+			Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+			if (!param) continue;
+			int stepCount = param->getInfo().stepCount;
+			if (stepCount <= 0) continue;
+			int mn = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
+			int buzzVal = mn + (int)(param->getNormalized() * stepCount + 0.5);
+			preset.paramValues.push_back(buzzVal);
+		}
+		for (int i = 0; i < activeTrackParams; i++) {
+			Parameter* param = parameters.getParameter(kBuzzTrackParamBase + i);
+			if (!param) continue;
+			int stepCount = param->getInfo().stepCount;
+			if (stepCount <= 0) continue;
+			int flatIdx = activeGlobalParams + i;
+			int mn = (flatIdx < (int)paramMinValues.size()) ? paramMinValues[flatIdx] : 0;
+			int buzzVal = mn + (int)(param->getNormalized() * stepCount + 0.5);
+			preset.paramValues.push_back(buzzVal);
+		}
+
+		// Set machine name if not already set
+		if (presetLoader.GetMachineName().empty()) {
+			presetLoader.SetMachineName(currentMachineName);
+		}
+
+		presetLoader.AddPreset(preset);
+
+		// Save to .prs file
+		std::string prsPath = BuzzPresetLoader::PrsPathForDll(currentDllPath);
+		if (!prsPath.empty() && presetLoader.Save(prsPath)) {
+			OutputDebugStringA("[BuzzBridge] Preset saved OK\n");
+
+			// Update combo box
+			if (activeView) {
+				std::vector<std::string> names;
+				for (auto& p : presetLoader.GetPresets())
+					names.push_back(p.name);
+				activeView->setPresetNames(names);
+			}
+		}
+	};
 	view->onDeferredParamUpdate = [this]() {
 		OutputDebugStringA("[BuzzBridge] Controller: deferred param update on UI thread\n");
 		if (activeView) {

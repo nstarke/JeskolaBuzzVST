@@ -2,7 +2,7 @@
 
 # BuzzBridge VST3
 
-![Tests](https://img.shields.io/badge/tests-508%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-513%20passed-brightgreen)
 
 ![images/image.png](images/image.png)
 

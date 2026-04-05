@@ -22,9 +22,20 @@ public:
     // Load presets from a .prs file. Returns true if any presets were loaded.
     bool Load(const std::string& prsPath);
 
+    // Save all presets (including any added) back to a .prs file.
+    // Creates the file if it doesn't exist.
+    bool Save(const std::string& prsPath) const;
+
+    // Add a preset to the in-memory list.
+    void AddPreset(const BuzzPreset& preset) { presets.push_back(preset); }
+
     // Find the .prs file for a machine DLL (same name, .prs extension)
+    static std::string PrsPathForDll(const std::string& dllPath);
+
+    // Find existing .prs file (returns empty if not found)
     static std::string FindPrsForDll(const std::string& dllPath);
 
+    void SetMachineName(const std::string& name) { machineName = name; }
     const std::string& GetMachineName() const { return machineName; }
     const std::vector<BuzzPreset>& GetPresets() const { return presets; }
     void Clear() { machineName.clear(); presets.clear(); }

@@ -12,11 +12,19 @@
 #include "../src/buzz/BuzzPresetLoader.h"
 #include "../src/vst3/ParameterMapping.h"
 #include "../src/buzz/MachineInterface.h"
+#include <windows.h>
 #include <cstring>
 #include <cmath>
 #include <limits>
 
 using namespace BuzzVst;
+
+static std::string GetGearPath(const char* relativePath) {
+    char profileDir[MAX_PATH] = {};
+    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) return "";
+    return std::string(profileDir) + "\\Buzz\\Gear\\" + relativePath;
+}
 
 // ============================================================================
 // 1. New BridgeIPC structs (kCmdDescribeValue, kRespDescribeValue)
@@ -622,7 +630,7 @@ TEST(PresetLoader, LoadNonexistent) {
 
 TEST(PresetLoader, LoadErsBlippPresets) {
     std::string prs = BuzzPresetLoader::FindPrsForDll(
-        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+        GetGearPath("generators\\ErsBlipp.dll"));
     if (prs.empty()) return; // skip if not present
 
     BuzzPresetLoader loader;
@@ -638,7 +646,7 @@ TEST(PresetLoader, LoadErsBlippPresets) {
 
 TEST(PresetLoader, LoadCyanPhasePresets) {
     std::string prs = BuzzPresetLoader::FindPrsForDll(
-        "C:\\Users\\nick\\Buzz\\Gear\\generators\\CyanPhase Slide Flute.dll");
+        GetGearPath("generators\\CyanPhase Slide Flute.dll"));
     if (prs.empty()) return;
 
     BuzzPresetLoader loader;
@@ -654,7 +662,7 @@ TEST(PresetLoader, LoadCyanPhasePresets) {
 TEST(PresetLoader, ClearResets) {
     BuzzPresetLoader loader;
     std::string prs = BuzzPresetLoader::FindPrsForDll(
-        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+        GetGearPath("generators\\ErsBlipp.dll"));
     if (!prs.empty()) loader.Load(prs);
     loader.Clear();
     ASSERT_EQ(loader.GetPresets().size(), 0u);
@@ -664,7 +672,7 @@ TEST(PresetLoader, ClearResets) {
 TEST(PresetLoader, PresetParamCountMatchesStateParams) {
     // ErsBlipp has 6 track params, 5 with MPF_STATE. Presets should have 5 values.
     std::string prs = BuzzPresetLoader::FindPrsForDll(
-        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+        GetGearPath("generators\\ErsBlipp.dll"));
     if (prs.empty()) return;
 
     BuzzPresetLoader loader;
@@ -672,4 +680,127 @@ TEST(PresetLoader, PresetParamCountMatchesStateParams) {
     for (auto& p : loader.GetPresets()) {
         ASSERT_EQ(p.paramValues.size(), 5u);
     }
+}
+
+// ============================================================================
+// 16. Preset save and roundtrip
+// ============================================================================
+
+TEST(PresetSave, SaveAndReload) {
+    // Create a preset, save to temp file, reload and verify
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_preset.prs";
+
+    BuzzPresetLoader saver;
+    saver.SetMachineName("TestMachine");
+
+    BuzzPreset p1;
+    p1.name = "Bright Lead";
+    p1.paramValues = {100, 200, 50, 128};
+    p1.comment = "A bright lead sound";
+    saver.AddPreset(p1);
+
+    BuzzPreset p2;
+    p2.name = "Soft Pad";
+    p2.paramValues = {30, 180, 90, 64};
+    saver.AddPreset(p2);
+
+    ASSERT_TRUE(saver.Save(tempPrs));
+
+    // Reload
+    BuzzPresetLoader loader;
+    ASSERT_TRUE(loader.Load(tempPrs));
+    ASSERT_EQ(loader.GetMachineName(), std::string("TestMachine"));
+    ASSERT_EQ(loader.GetPresets().size(), 2u);
+
+    ASSERT_EQ(loader.GetPresets()[0].name, std::string("Bright Lead"));
+    ASSERT_EQ(loader.GetPresets()[0].paramValues.size(), 4u);
+    ASSERT_EQ(loader.GetPresets()[0].paramValues[0], 100);
+    ASSERT_EQ(loader.GetPresets()[0].paramValues[3], 128);
+    ASSERT_EQ(loader.GetPresets()[0].comment, std::string("A bright lead sound"));
+
+    ASSERT_EQ(loader.GetPresets()[1].name, std::string("Soft Pad"));
+    ASSERT_EQ(loader.GetPresets()[1].paramValues[0], 30);
+    ASSERT_TRUE(loader.GetPresets()[1].comment.empty());
+
+    // Cleanup
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetSave, AppendToExisting) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_append.prs";
+
+    // Save initial preset
+    BuzzPresetLoader saver;
+    saver.SetMachineName("AppendTest");
+    BuzzPreset p1;
+    p1.name = "First";
+    p1.paramValues = {10, 20};
+    saver.AddPreset(p1);
+    ASSERT_TRUE(saver.Save(tempPrs));
+
+    // Reload, add another, save again
+    BuzzPresetLoader loader;
+    ASSERT_TRUE(loader.Load(tempPrs));
+    ASSERT_EQ(loader.GetPresets().size(), 1u);
+
+    BuzzPreset p2;
+    p2.name = "Second";
+    p2.paramValues = {30, 40};
+    loader.AddPreset(p2);
+    ASSERT_TRUE(loader.Save(tempPrs));
+
+    // Reload and verify both are there
+    BuzzPresetLoader final;
+    ASSERT_TRUE(final.Load(tempPrs));
+    ASSERT_EQ(final.GetPresets().size(), 2u);
+    ASSERT_EQ(final.GetPresets()[0].name, std::string("First"));
+    ASSERT_EQ(final.GetPresets()[1].name, std::string("Second"));
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetSave, SaveEmptyFails) {
+    BuzzPresetLoader saver;
+    // No machine name set
+    ASSERT_FALSE(saver.Save("C:\\temp\\test.prs"));
+}
+
+TEST(PresetSave, PrsPathForDll) {
+    ASSERT_EQ(BuzzPresetLoader::PrsPathForDll("C:\\Gear\\Machine.dll"),
+              std::string("C:\\Gear\\Machine.prs"));
+    ASSERT_EQ(BuzzPresetLoader::PrsPathForDll("foo.dll"),
+              std::string("foo.prs"));
+    ASSERT_TRUE(BuzzPresetLoader::PrsPathForDll("").empty());
+    ASSERT_TRUE(BuzzPresetLoader::PrsPathForDll("abc").empty());
+}
+
+TEST(PresetSave, RoundtripWithComment) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_comment.prs";
+
+    BuzzPresetLoader saver;
+    saver.SetMachineName("CommentTest");
+    BuzzPreset p;
+    p.name = "WithComment";
+    p.paramValues = {42};
+    p.comment = "This has a comment";
+    saver.AddPreset(p);
+
+    BuzzPreset p2;
+    p2.name = "NoComment";
+    p2.paramValues = {99};
+    saver.AddPreset(p2);
+    ASSERT_TRUE(saver.Save(tempPrs));
+
+    BuzzPresetLoader loader;
+    ASSERT_TRUE(loader.Load(tempPrs));
+    ASSERT_EQ(loader.GetPresets()[0].comment, std::string("This has a comment"));
+    ASSERT_TRUE(loader.GetPresets()[1].comment.empty());
+
+    DeleteFileA(tempPrs.c_str());
 }

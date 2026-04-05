@@ -49,6 +49,7 @@ public:
 	std::function<void(Steinberg::Vst::ParamID id, double value)> onParamChanged;
 	std::function<void(Steinberg::Vst::ParamID id)> onParamEndEdit;
 	std::function<void(int presetIndex)> onPresetSelected;
+	std::function<void(const std::string& presetName)> onSavePreset;
 
 	// Update display
 	void setMachineName(const std::string& name);
@@ -133,6 +134,7 @@ private:
 	HWND hwndParamLabel = nullptr;
 	HWND hwndPresetCombo = nullptr;
 	HWND hwndPresetLabel = nullptr;
+	HWND hwndSavePresetButton = nullptr;
 
 	// Fonts (recreated on scale change)
 	HFONT hBoldFont = nullptr;
@@ -168,6 +170,7 @@ private:
 	static const int kRemoveTrackButtonID = 1007;
 	static const int kFilterEditID = 1008;
 	static const int kPresetComboID = 1009;
+	static const int kSavePresetButtonID = 1010;
 	static const int kParamSliderBaseID = 2000;
 	static const int kParamLabelBaseID = 3000;
 

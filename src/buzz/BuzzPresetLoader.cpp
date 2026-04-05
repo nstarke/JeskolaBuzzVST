@@ -19,6 +19,14 @@ static bool ReadString(std::ifstream& f, uint32_t len, std::string& out) {
     return true;
 }
 
+static void WriteU32(std::ofstream& f, uint32_t val) {
+    f.write(reinterpret_cast<const char*>(&val), 4);
+}
+
+static void WriteString(std::ofstream& f, const std::string& s) {
+    f.write(s.c_str(), s.size());
+}
+
 bool BuzzPresetLoader::Load(const std::string& prsPath) {
     Clear();
 
@@ -79,16 +87,58 @@ bool BuzzPresetLoader::Load(const std::string& prsPath) {
     return !presets.empty();
 }
 
-std::string BuzzPresetLoader::FindPrsForDll(const std::string& dllPath) {
+bool BuzzPresetLoader::Save(const std::string& prsPath) const {
+    if (machineName.empty()) return false;
+
+    std::ofstream f(prsPath, std::ios::binary | std::ios::trunc);
+    if (!f.is_open()) return false;
+
+    // Version
+    WriteU32(f, 1);
+
+    // Machine name
+    WriteU32(f, (uint32_t)machineName.size());
+    WriteString(f, machineName);
+
+    // Number of presets
+    WriteU32(f, (uint32_t)presets.size());
+
+    for (auto& preset : presets) {
+        // Preset name
+        WriteU32(f, (uint32_t)preset.name.size());
+        WriteString(f, preset.name);
+
+        // Number of tracks (always 1)
+        WriteU32(f, 1);
+
+        // Number of parameters
+        WriteU32(f, (uint32_t)preset.paramValues.size());
+
+        // Parameter values
+        for (auto val : preset.paramValues) {
+            WriteU32(f, (uint32_t)val);
+        }
+
+        // Comment
+        WriteU32(f, (uint32_t)preset.comment.size());
+        if (!preset.comment.empty()) {
+            WriteString(f, preset.comment);
+        }
+    }
+
+    return f.good();
+}
+
+std::string BuzzPresetLoader::PrsPathForDll(const std::string& dllPath) {
     if (dllPath.size() < 4) return "";
-
-    // Replace .dll extension with .prs
-    std::string prsPath = dllPath;
-    size_t dotPos = prsPath.rfind('.');
+    size_t dotPos = dllPath.rfind('.');
     if (dotPos == std::string::npos) return "";
-    prsPath = prsPath.substr(0, dotPos) + ".prs";
+    return dllPath.substr(0, dotPos) + ".prs";
+}
 
-    // Check if file exists
+std::string BuzzPresetLoader::FindPrsForDll(const std::string& dllPath) {
+    std::string prsPath = PrsPathForDll(dllPath);
+    if (prsPath.empty()) return "";
     std::ifstream f(prsPath);
     if (f.good()) return prsPath;
     return "";
