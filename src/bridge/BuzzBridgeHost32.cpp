@@ -552,10 +552,20 @@ static void HandleDescribeValue() {
 	});
 
 	if (desc && desc[0]) {
-		uint32_t len = (uint32_t)strlen(desc);
-		g_pipe.SendResponse(kRespDescribeValue, desc, len);
+		// Safely measure length — machine may return a bad pointer
+		uint32_t len = 0;
+		__try {
+			len = (uint32_t)strnlen(desc, 255);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			len = 0;
+		}
+		if (len > 0) {
+			g_pipe.SendResponse(kRespDescribeValue, desc, len);
+		} else {
+			g_pipe.SendResponse(kRespDescribeValue, "", 0);
+		}
 	} else {
-		// No description — send empty response
 		g_pipe.SendResponse(kRespDescribeValue, "", 0);
 	}
 }
@@ -643,18 +653,21 @@ static void HandleGetInfo() {
 	bmi.numTrackParams = (int32_t)tSlots.size();
 	bmi.minTracks = info->minTracks;
 	bmi.maxTracks = info->maxTracks;
-	if (info->Name) {
-		strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
-		bmi.name[sizeof(bmi.name) - 1] = '\0';
-	}
-	if (info->ShortName) {
-		strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
-		bmi.shortName[sizeof(bmi.shortName) - 1] = '\0';
-	}
-	if (info->Author) {
-		strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
-		bmi.author[sizeof(bmi.author) - 1] = '\0';
-	}
+	// Copy strings from machine info with SEH protection (pointers may be garbage)
+	SEH_Call([&]() {
+		if (info->Name) {
+			strncpy(bmi.name, info->Name, sizeof(bmi.name) - 1);
+			bmi.name[sizeof(bmi.name) - 1] = '\0';
+		}
+		if (info->ShortName) {
+			strncpy(bmi.shortName, info->ShortName, sizeof(bmi.shortName) - 1);
+			bmi.shortName[sizeof(bmi.shortName) - 1] = '\0';
+		}
+		if (info->Author) {
+			strncpy(bmi.author, info->Author, sizeof(bmi.author) - 1);
+			bmi.author[sizeof(bmi.author) - 1] = '\0';
+		}
+	});
 
 	// Build param info array
 	int totalParams = bmi.numGlobalParams + bmi.numTrackParams;

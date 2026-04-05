@@ -1130,14 +1130,20 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 			Steinberg::int32 pLen = 0;
 			if (!streamer.readInt32(pLen)) break;
 
-			if (slotIdx < WAVE_MIN || slotIdx > WAVE_MAX) {
-				if (pLen > 0 && pLen < 32768) {
-					char skip[32768];
-					streamer.readRaw(skip, pLen);
+			if (pLen <= 0 || pLen > 4095) {
+				// Skip invalid or oversized path entries
+				// Use heap for skip buffer to avoid stack overflow
+				if (pLen > 0 && pLen <= 65536) {
+					std::vector<char> skip(pLen);
+					streamer.readRaw(skip.data(), pLen);
 				}
 				continue;
 			}
-			if (pLen <= 0 || pLen >= 4096) continue;
+			if (slotIdx < WAVE_MIN || slotIdx > WAVE_MAX) {
+				std::vector<char> skip(pLen);
+				streamer.readRaw(skip.data(), pLen);
+				continue;
+			}
 
 			char wavBuf[4096] = {};
 			if (streamer.readRaw(wavBuf, pLen) == pLen) {
@@ -1354,7 +1360,11 @@ void BuzzProcessor::sendMachineLoadedToController()
 				for (int v = bp->MinValue; v <= bp->MaxValue; v++) {
 					const char* d = nullptr;
 					SEH_Call([&]() { d = machine->DescribeValue(p, v); });
-					if (d && d[0]) { descs[v - bp->MinValue] = d; hasAny = true; }
+					if (d) {
+						size_t dLen = 0;
+						SEH_Call([&]() { dLen = strnlen(d, 255); });
+						if (dLen > 0) { descs[v - bp->MinValue] = std::string(d, dLen); hasAny = true; }
+					}
 				}
 				if (!hasAny) continue;
 
