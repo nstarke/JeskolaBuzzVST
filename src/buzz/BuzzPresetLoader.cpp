@@ -16,6 +16,10 @@ static bool ReadString(std::ifstream& f, uint32_t len, std::string& out) {
     // Strip trailing nulls/whitespace
     while (!out.empty() && (out.back() == '\0' || out.back() == '\n' || out.back() == '\r'))
         out.pop_back();
+    // Strip embedded control chars (except space) that could indicate corruption
+    for (auto& c : out) {
+        if (c > 0 && c < 0x20 && c != '\t') c = ' ';
+    }
     return true;
 }
 
@@ -33,6 +37,12 @@ bool BuzzPresetLoader::Load(const std::string& prsPath) {
     std::ifstream f(prsPath, std::ios::binary);
     if (!f.is_open()) return false;
 
+    // Check file size to prevent excessive allocation from malicious files
+    f.seekg(0, std::ios::end);
+    auto fileSize = f.tellg();
+    f.seekg(0, std::ios::beg);
+    if (fileSize <= 0 || fileSize > 10 * 1024 * 1024) return false; // max 10 MB
+
     // Version
     uint32_t version = 0;
     if (!ReadU32(f, version)) return false;
@@ -41,7 +51,9 @@ bool BuzzPresetLoader::Load(const std::string& prsPath) {
     // Machine name
     uint32_t nameLen = 0;
     if (!ReadU32(f, nameLen)) return false;
+    if (nameLen > 256) return false; // machine names should be short
     if (!ReadString(f, nameLen, machineName)) return false;
+    if (machineName.empty()) return false;
 
     // Number of presets
     uint32_t numPresets = 0;
@@ -54,29 +66,34 @@ bool BuzzPresetLoader::Load(const std::string& prsPath) {
         // Preset name
         uint32_t pNameLen = 0;
         if (!ReadU32(f, pNameLen)) break;
+        if (pNameLen > 256) break; // preset names should be short
         if (!ReadString(f, pNameLen, preset.name)) break;
+        if (preset.name.empty()) break;
 
         // Number of tracks (always 1 in known files)
         uint32_t numTracks = 0;
         if (!ReadU32(f, numTracks)) break;
+        if (numTracks > 64) break; // sanity limit
 
         // Number of parameters
         uint32_t numParams = 0;
         if (!ReadU32(f, numParams)) break;
         if (numParams > 512) break; // sanity limit
 
-        // Parameter values
-        preset.paramValues.resize(numParams);
+        // Parameter values — read one at a time with failure tracking
+        preset.paramValues.reserve(numParams);
+        bool readOk = true;
         for (uint32_t p = 0; p < numParams; p++) {
             uint32_t val = 0;
-            if (!ReadU32(f, val)) break;
-            preset.paramValues[p] = (int32_t)val;
+            if (!ReadU32(f, val)) { readOk = false; break; }
+            preset.paramValues.push_back((int32_t)val);
         }
-        if (preset.paramValues.size() != numParams) break;
+        if (!readOk) break;
 
         // Comment
         uint32_t commentLen = 0;
         if (!ReadU32(f, commentLen)) break;
+        if (commentLen > 4096) break; // sanity limit for comments
         if (commentLen > 0) {
             if (!ReadString(f, commentLen, preset.comment)) break;
         }

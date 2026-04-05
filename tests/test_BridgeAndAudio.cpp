@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cmath>
 #include <limits>
+#include <fstream>
 
 using namespace BuzzVst;
 
@@ -801,6 +802,127 @@ TEST(PresetSave, RoundtripWithComment) {
     ASSERT_TRUE(loader.Load(tempPrs));
     ASSERT_EQ(loader.GetPresets()[0].comment, std::string("This has a comment"));
     ASSERT_TRUE(loader.GetPresets()[1].comment.empty());
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+// ============================================================================
+// 17. Preset validation (untrusted .prs files)
+// ============================================================================
+
+TEST(PresetValidation, RejectTruncatedFile) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_truncated.prs";
+
+    // Write just the version and a partial machine name length
+    std::ofstream f(tempPrs, std::ios::binary);
+    uint32_t version = 1;
+    f.write((char*)&version, 4);
+    uint32_t nameLen = 100; // claims 100 bytes but file ends here
+    f.write((char*)&nameLen, 4);
+    f.close();
+
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load(tempPrs));
+    ASSERT_EQ(loader.GetPresets().size(), 0u);
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetValidation, RejectBadVersion) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_badver.prs";
+
+    std::ofstream f(tempPrs, std::ios::binary);
+    uint32_t version = 99;
+    f.write((char*)&version, 4);
+    f.close();
+
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load(tempPrs));
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetValidation, RejectHugePresetCount) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_hugecount.prs";
+
+    std::ofstream f(tempPrs, std::ios::binary);
+    uint32_t v;
+    v = 1; f.write((char*)&v, 4);
+    v = 4; f.write((char*)&v, 4);
+    f.write("Test", 4);
+    v = 999999; f.write((char*)&v, 4); // way too many presets
+    f.close();
+
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load(tempPrs));
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetValidation, RejectHugeParamCount) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_hugeparams.prs";
+
+    std::ofstream f(tempPrs, std::ios::binary);
+    uint32_t v;
+    v = 1; f.write((char*)&v, 4);
+    v = 4; f.write((char*)&v, 4);
+    f.write("Test", 4);
+    v = 1; f.write((char*)&v, 4);      // 1 preset
+    v = 3; f.write((char*)&v, 4);      // name len
+    f.write("Bad", 3);
+    v = 1; f.write((char*)&v, 4);      // numTracks
+    v = 99999; f.write((char*)&v, 4);  // numParams too large
+    f.close();
+
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load(tempPrs));
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetValidation, RejectEmptyFile) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_empty.prs";
+
+    std::ofstream f(tempPrs, std::ios::binary);
+    f.close();
+
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load(tempPrs));
+
+    DeleteFileA(tempPrs.c_str());
+}
+
+TEST(PresetValidation, ControlCharsStripped) {
+    char tempDir[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempDir);
+    std::string tempPrs = std::string(tempDir) + "buzzbridge_test_ctrlchars.prs";
+
+    BuzzPresetLoader saver;
+    saver.SetMachineName("TestMachine");
+    BuzzPreset p;
+    p.name = "Test\x01\x02Name";
+    p.paramValues = {42};
+    saver.AddPreset(p);
+    saver.Save(tempPrs);
+
+    BuzzPresetLoader loader;
+    loader.Load(tempPrs);
+    if (!loader.GetPresets().empty()) {
+        auto& name = loader.GetPresets()[0].name;
+        for (char c : name) {
+            ASSERT_TRUE(c >= 0x20 || c == '\t' || c < 0);
+        }
+    }
 
     DeleteFileA(tempPrs.c_str());
 }

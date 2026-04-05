@@ -1178,6 +1178,9 @@ void BuzzController::applyPreset(int presetIndex)
 		if (stepCount <= 0) continue;
 
 		int buzzVal = preset.paramValues[presetIdx++];
+		// Clamp to valid range (preset file is untrusted)
+		if (buzzVal < mn) buzzVal = mn;
+		if (buzzVal > mn + stepCount) buzzVal = mn + stepCount;
 		double normalized = (double)(buzzVal - mn) / (double)stepCount;
 		if (normalized < 0.0) normalized = 0.0;
 		if (normalized > 1.0) normalized = 1.0;
@@ -1201,6 +1204,9 @@ void BuzzController::applyPreset(int presetIndex)
 		if (stepCount <= 0) continue;
 
 		int buzzVal = preset.paramValues[presetIdx++];
+		// Clamp to valid range (preset file is untrusted)
+		if (buzzVal < mn) buzzVal = mn;
+		if (buzzVal > mn + stepCount) buzzVal = mn + stepCount;
 		double normalized = (double)(buzzVal - mn) / (double)stepCount;
 		if (normalized < 0.0) normalized = 0.0;
 		if (normalized > 1.0) normalized = 1.0;
