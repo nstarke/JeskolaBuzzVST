@@ -391,8 +391,14 @@ void BuzzPluginView::createControls(HWND parent)
 	SendMessage(hwndParamLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
 	y += S(18);
 
+	// The parameter panel and machine list share the remaining vertical space.
+	// Calculate how much room is left for both, then split it: ~40% params, ~60% machine list.
+	int fixedBelowParams = S(18) + S(24) + S(8); // gear label + filter edit + bottom margin
+	int remainingSpace = h - y - fixedBelowParams;
+	int paramPanelHeight = std::max(S(120), remainingSpace * 2 / 5);  // 40% of remaining, min 120
+	int machineListHeight = std::max(S(80), remainingSpace - paramPanelHeight); // rest for machine list
+
 	// Scrollable parameter panel
-	int paramPanelHeight = S(200);
 	hwndParamPanel = CreateWindowExW(WS_EX_CLIENTEDGE, kParamPanelClassName, L"",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN,
 		innerMargin, y, w - 2 * innerMargin, paramPanelHeight,
@@ -420,7 +426,7 @@ void BuzzPluginView::createControls(HWND parent)
 	// Machine listbox
 	hwndMachineList = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
-		innerMargin, y, w - 2 * innerMargin, h - y - S(8),
+		innerMargin, y, w - 2 * innerMargin, machineListHeight,
 		hwndContainer, (HMENU)(INT_PTR)kMachineListID, hInst, nullptr);
 	SendMessage(hwndMachineList, WM_SETFONT, (WPARAM)hFont, TRUE);
 

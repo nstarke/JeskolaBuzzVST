@@ -160,7 +160,7 @@ private:
 	static const int kVisibleWaveSlots = 16; // how many slots to show in the list
 
 	static const int kBaseWidth = 500;
-	static const int kBaseHeight = 730;
+	static const int kBaseHeight = 900;
 	static const int kDllButtonID = 1001;
 	static const int kGearButtonID = 1002;
 	static const int kMachineListID = 1003;
