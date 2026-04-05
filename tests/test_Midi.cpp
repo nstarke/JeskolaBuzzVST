@@ -1,6 +1,5 @@
-#include <windows.h>
 #include "TestFramework.h"
-#include "../src/buzz/MachineInterface.h"
+#include "TestHelpers.h"
 #include "../src/buzz/BuzzParamLayout.h"
 #include "../src/buzz/BuzzCallbacks.h"
 #include "../src/buzz/BuzzMachineLoader.h"
@@ -177,18 +176,7 @@ TEST(MidiVelocity, AllSteps) {
 // Note parameter writing (simulates writeNoteToParams behavior)
 // ===========================================================================
 
-static CMachineParameter MakeParam(CMPType type, int minVal, int maxVal, int noVal, int defVal, int flags = MPF_STATE) {
-	CMachineParameter p = {};
-	p.Type = type;
-	p.Name = "Test";
-	p.Description = "Test";
-	p.MinValue = minVal;
-	p.MaxValue = maxVal;
-	p.NoValue = noVal;
-	p.DefValue = defVal;
-	p.Flags = flags;
-	return p;
-}
+// MakeParam is in TestHelpers.h
 
 TEST(MidiNoteParam, WriteNoteToGlobalParam) {
 	CMachineParameter pNote = MakeParam(pt_note, NOTE_MIN, NOTE_MAX, NOTE_NO, 0, 0);
@@ -329,18 +317,7 @@ TEST(MidiCallbacks, SetMachineInterfaceExNull) {
 // Integration: MidiNote on real machine
 // ===========================================================================
 
-static std::string GetRefPath(const char* relPath) {
-	char exePath[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-	std::string path = exePath;
-	for (int i = 0; i < 4; i++) {
-		size_t pos = path.find_last_of("\\/");
-		if (pos != std::string::npos) path = path.substr(0, pos);
-	}
-	path += "/";
-	path += relPath;
-	return path;
-}
+// GetRefPath is in TestHelpers.h
 
 TEST(MidiIntegration, MidiNoteOnRealMachine) {
 	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");

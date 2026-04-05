@@ -2,6 +2,7 @@
 // wave table boundary conditions, and parameter persistence data flow.
 
 #include "TestFramework.h"
+#include "TestHelpers.h"
 #include "../src/bridge/BridgeIPC.h"
 #include "../src/vst3/plugids.h"
 #include "../src/buzz/BuzzWaveTable.h"
@@ -12,21 +13,12 @@
 #include "../src/buzz/BuzzPresetLoader.h"
 #include "../src/vst3/ParameterMapping.h"
 #include "../src/vst3/GearScanner.h"
-#include "../src/buzz/MachineInterface.h"
-#include <windows.h>
 #include <cstring>
 #include <cmath>
 #include <limits>
 #include <fstream>
 
 using namespace BuzzVst;
-
-static std::string GetGearPath(const char* relativePath) {
-    char profileDir[MAX_PATH] = {};
-    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return "";
-    return std::string(profileDir) + "\\Buzz\\Gear\\" + relativePath;
-}
 
 // ============================================================================
 // 1. New BridgeIPC structs (kCmdDescribeValue, kRespDescribeValue)
@@ -210,17 +202,7 @@ TEST(MidiCCMapping, GlobalTrackNoOverlap) {
 // 7. ParameterMapping with non-zero min (deferred restore path)
 // ============================================================================
 
-static CMachineParameter MakeParam(int type, int mn, int mx, int noVal, int defVal, int flags = MPF_STATE) {
-    CMachineParameter p = {};
-    p.Type = (CMPType)type;
-    p.MinValue = mn;
-    p.MaxValue = mx;
-    p.NoValue = noVal;
-    p.DefValue = defVal;
-    p.Flags = flags;
-    p.Name = "Test";
-    return p;
-}
+// MakeParam is in TestHelpers.h
 
 TEST(DeferredParamRestore, NonZeroMinConversion) {
     // Simulates the deferred restore path: (buzzValue - mn) / stepCount

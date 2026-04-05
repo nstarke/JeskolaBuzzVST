@@ -1,23 +1,8 @@
-#include <windows.h>
 #include "TestFramework.h"
+#include "TestHelpers.h"
 #include "../src/vst3/GearScanner.h"
-#include "../src/buzz/MachineInterface.h"
 
 using namespace BuzzVst;
-
-// Helper to build paths relative to the test executable
-static std::string GetRefPath(const char* relPath) {
-	char exePath[MAX_PATH] = {};
-	GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-	std::string path = exePath;
-	for (int i = 0; i < 4; i++) {
-		size_t pos = path.find_last_of("\\/");
-		if (pos != std::string::npos) path = path.substr(0, pos);
-	}
-	path += "/";
-	path += relPath;
-	return path;
-}
 
 // ===== Basic scanning =====
 
