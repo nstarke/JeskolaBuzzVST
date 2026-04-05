@@ -47,11 +47,15 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 	if (totalParams > 0 && !info->Parameters)
 		return false;
 
-	// Spot-check first parameter pointer
+	// Spot-check ALL parameter pointers under SEH
 	if (totalParams > 0) {
 		__try {
-			volatile const char* name = info->Parameters[0]->Name;
-			(void)name;
+			for (int i = 0; i < totalParams; i++) {
+				if (!info->Parameters[i]) return false;
+				volatile int t = info->Parameters[i]->Type;
+				volatile const char* name = info->Parameters[i]->Name;
+				(void)t; (void)name;
+			}
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER) {
 			return false;
@@ -63,6 +67,23 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 		return false;
 	if (info->maxTracks < info->minTracks)
 		return false;
+
+	// Validate attribute count and pointers
+	if (info->numAttributes < 0 || info->numAttributes > 256)
+		return false;
+	if (info->numAttributes > 0) {
+		if (!info->Attributes) return false;
+		__try {
+			for (int i = 0; i < info->numAttributes; i++) {
+				if (!info->Attributes[i]) return false;
+				volatile int d = info->Attributes[i]->DefValue;
+				(void)d;
+			}
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			return false;
+		}
+	}
 
 	return true;
 }

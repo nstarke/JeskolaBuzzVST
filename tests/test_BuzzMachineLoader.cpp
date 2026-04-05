@@ -311,13 +311,32 @@ TEST(MachineLoader, FSMKickXPWithNote) {
 
 	auto* machine = loader.GetMachine();
 	auto* layout = loader.GetParamLayout();
+	auto& tSlots = layout->GetTrackSlots();
 
-	// Defaults + tick
+	// First tick: defaults
 	layout->WriteAllDefaults(machine->GlobalVals);
+	if (machine->TrackVals && !tSlots.empty()) {
+		for (int i = 0; i < (int)tSlots.size(); i++)
+			layout->WriteTrackParam(machine->TrackVals, 0, i, tSlots[i].param->DefValue);
+	}
+	SEH_Call([&]() { machine->Tick(); });
+
+	// Second tick: trigger a note
+	if (machine->GlobalVals) layout->WriteAllNoValues(machine->GlobalVals);
+	if (machine->TrackVals && !tSlots.empty())
+		layout->WriteTrackAllNoValues(machine->TrackVals, 1);
+	for (int i = 0; i < (int)tSlots.size(); i++) {
+		if (tSlots[i].param->Type == pt_note) {
+			layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51); // C-5
+			if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte)
+				layout->WriteTrackParam(machine->TrackVals, 0, i + 1, tSlots[i+1].param->MaxValue);
+			break;
+		}
+	}
 	SEH_Call([&]() { machine->Tick(); });
 
 	float maxSample = 0;
-	for (int block = 0; block < 20; block++) {
+	for (int block = 0; block < 50; block++) {
 		float buffer[256] = {};
 		bool hasOutput = false;
 		SEH_Call([&]() { hasOutput = machine->Work(buffer, 256, WM_WRITE); });

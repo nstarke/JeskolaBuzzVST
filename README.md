@@ -2,6 +2,8 @@
 
 # BuzzBridge VST3
 
+![Tests](https://img.shields.io/badge/tests-500%20passed-brightgreen)
+
 ![images/image.png](images/image.png)
 
 A VST3 wrapper that loads [Jeskola Buzz](https://jeskola.net/buzz/) machine DLLs and runs them inside any VST3-compatible DAW. Buzz machines are 32-bit plugin DLLs that represent virtual instruments and effects in the Buzz music tracker.
