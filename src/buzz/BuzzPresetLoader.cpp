@@ -1,6 +1,8 @@
 #include "BuzzPresetLoader.h"
+#include <windows.h>
 #include <fstream>
 #include <cstring>
+#include <cctype>
 
 namespace BuzzVst {
 
@@ -153,7 +155,38 @@ std::string BuzzPresetLoader::PrsPathForDll(const std::string& dllPath) {
     return dllPath.substr(0, dotPos) + ".prs";
 }
 
+// Build the OneDrive preset path for a DLL.
+// Given a DLL like "C:\Users\X\Buzz\Gear\generators\Machine.dll", extracts
+// the relative "\Gear\generators\Machine.prs" portion and maps it to
+// "%USERPROFILE%\OneDrive\BuzzVST\Gear\generators\Machine.prs".
+static std::string oneDrivePrsPath(const std::string& dllPath) {
+    std::string prs = BuzzPresetLoader::PrsPathForDll(dllPath);
+    if (prs.empty()) return "";
+
+    // Find the \Gear\ segment (case-insensitive)
+    std::string lower = prs;
+    for (auto& c : lower) c = (char)tolower((unsigned char)c);
+    size_t gearPos = lower.find("\\gear\\");
+    if (gearPos == std::string::npos) gearPos = lower.find("/gear/");
+    if (gearPos == std::string::npos) return "";
+
+    char profileDir[MAX_PATH] = {};
+    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) return "";
+
+    std::string relPath = prs.substr(gearPos); // e.g. \Gear\generators\Machine.prs
+    return std::string(profileDir) + "\\OneDrive\\BuzzVST" + relPath;
+}
+
 std::string BuzzPresetLoader::FindPrsForDll(const std::string& dllPath) {
+    // 1. Try OneDrive Gear directory first
+    std::string odPath = oneDrivePrsPath(dllPath);
+    if (!odPath.empty()) {
+        std::ifstream f(odPath);
+        if (f.good()) return odPath;
+    }
+
+    // 2. Fall back to local .prs beside the DLL
     std::string prsPath = PrsPathForDll(dllPath);
     if (prsPath.empty()) return "";
     std::ifstream f(prsPath);
