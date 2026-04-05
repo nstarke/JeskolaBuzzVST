@@ -21,7 +21,9 @@ static std::string GetRefPath(const char* relPath) {
 int main() {
     printf("=== FSM Infector Debug Test ===\n\n");
 
-    std::string path = "C:\\Users\\nick\\Buzz\\Gear\\generators\\FSM Infector.dll";
+    char profileDir[MAX_PATH] = {};
+    GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
+    std::string path = std::string(profileDir) + "\\Buzz\\Gear\\generators\\FSM Infector.dll";
 
     BuzzMachineLoader loader;
     if (!loader.Load(path.c_str())) {

@@ -14,6 +14,7 @@
 #include <atomic>
 #include <mutex>
 #include <map>
+#include "../buzz/BuzzPresetLoader.h"
 
 namespace BuzzVst {
 
@@ -111,6 +112,10 @@ private:
 	std::map<int, std::vector<std::string>> paramValueDescs;
 
 	void applyDeferredParamValues();
+	void loadPresetsForMachine(const std::string& dllPath);
+	void applyPreset(int presetIndex);
+
+	BuzzPresetLoader presetLoader;
 };
 
 class GeneratorController : public BuzzController {

@@ -364,6 +364,27 @@ void BuzzPluginView::createControls(HWND parent)
 	setTrackInfo(currentTracks, minTracks, maxTracks);
 	y += S(28);
 
+	// Preset combo box
+	hwndPresetLabel = CreateWindowExW(0, L"STATIC", L"Preset:",
+		WS_CHILD | SS_LEFT,
+		innerMargin, y + S(2), S(45), S(16), hwndContainer, nullptr, hInst, nullptr);
+	SendMessage(hwndPresetLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+	int presetBtnW = S(50);
+	hwndPresetCombo = CreateWindowExW(0, L"COMBOBOX", L"",
+		WS_CHILD | CBS_DROPDOWNLIST | WS_VSCROLL,
+		innerMargin + S(48), y, w - 2 * innerMargin - S(48) - presetBtnW - S(4), S(200),
+		hwndContainer, (HMENU)(INT_PTR)kPresetComboID, hInst, nullptr);
+	SendMessage(hwndPresetCombo, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+
+	hwndSavePresetButton = CreateWindowExW(0, L"BUTTON", L"Save",
+		WS_CHILD | BS_PUSHBUTTON,
+		w - innerMargin - presetBtnW, y, presetBtnW, S(22),
+		hwndContainer, (HMENU)(INT_PTR)kSavePresetButtonID, hInst, nullptr);
+	SendMessage(hwndSavePresetButton, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+	// Hidden until a machine is loaded
+	y += S(28);
+
 	// Parameters label
 	hwndParamLabel = CreateWindowExW(0, L"STATIC", L"Parameters",
 		WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -462,6 +483,101 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 				if (id == kRemoveTrackButtonID && code == BN_CLICKED) {
 					if (self->onTrackCountChanged && self->currentTracks > self->minTracks)
 						self->onTrackCountChanged(-1);
+					return 0;
+				}
+				if (id == kPresetComboID && code == CBN_SELCHANGE) {
+					int sel = (int)SendMessage(self->hwndPresetCombo, CB_GETCURSEL, 0, 0);
+					if (sel > 0 && self->onPresetSelected)
+						self->onPresetSelected(sel - 1);
+					return 0;
+				}
+				if (id == kSavePresetButtonID && code == BN_CLICKED) {
+					if (self->onSavePreset) {
+						// Build a DLGTEMPLATE in memory for a simple input dialog
+						#pragma pack(push, 4)
+						struct {
+							DLGTEMPLATE dlg;
+							WORD menu, cls, title;
+							// Controls follow (edit + OK + Cancel)
+						} tmpl = {};
+						#pragma pack(pop)
+
+						// Use simpler approach: editable combo box text as preset name
+						// Prompt with a simple dialog template created at runtime
+						static char s_presetName[256] = {};
+						strcpy(s_presetName, "My Preset");
+
+						// Minimal approach: use the combo box's edit field
+						// Actually just use a simple Windows prompt
+						HWND hParent = self->hwndContainer;
+						// Create popup with edit
+						HWND hDlg = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+							L"#32770", L"Save Preset",
+							WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME | WS_VISIBLE,
+							0, 0, 300, 130, hParent, nullptr, GetModuleHandle(nullptr), nullptr);
+						if (!hDlg) return 0;
+
+						// Center on parent
+						RECT pr; GetWindowRect(hParent, &pr);
+						SetWindowPos(hDlg, HWND_TOP,
+							(pr.left + pr.right) / 2 - 150, (pr.top + pr.bottom) / 2 - 65,
+							0, 0, SWP_NOSIZE);
+
+						HINSTANCE hI = GetModuleHandle(nullptr);
+						HWND hLabel = CreateWindowExW(0, L"STATIC", L"Preset name:",
+							WS_CHILD | WS_VISIBLE, 10, 10, 270, 18, hDlg, nullptr, hI, nullptr);
+						HWND hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"My Preset",
+							WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | WS_TABSTOP,
+							10, 30, 270, 24, hDlg, (HMENU)100, hI, nullptr);
+						HWND hOK = CreateWindowExW(0, L"BUTTON", L"Save",
+							WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
+							70, 65, 70, 28, hDlg, (HMENU)IDOK, hI, nullptr);
+						HWND hCan = CreateWindowExW(0, L"BUTTON", L"Cancel",
+							WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+							150, 65, 70, 28, hDlg, (HMENU)IDCANCEL, hI, nullptr);
+						SendMessage(hLabel, WM_SETFONT, (WPARAM)self->hFont, TRUE);
+						SendMessage(hEdit, WM_SETFONT, (WPARAM)self->hFont, TRUE);
+						SendMessage(hOK, WM_SETFONT, (WPARAM)self->hFont, TRUE);
+						SendMessage(hCan, WM_SETFONT, (WPARAM)self->hFont, TRUE);
+						SendMessage(hEdit, EM_SETSEL, 0, -1);
+						SetFocus(hEdit);
+						EnableWindow(hParent, FALSE);
+
+						MSG m;
+						bool done = false;
+						while (!done && GetMessage(&m, nullptr, 0, 0)) {
+							if (m.hwnd == hDlg || IsChild(hDlg, m.hwnd)) {
+								if (m.message == WM_KEYDOWN && m.wParam == VK_RETURN) {
+									GetWindowTextA(hEdit, s_presetName, sizeof(s_presetName));
+									if (s_presetName[0]) self->onSavePreset(s_presetName);
+									done = true; continue;
+								}
+								if (m.message == WM_KEYDOWN && m.wParam == VK_ESCAPE) {
+									done = true; continue;
+								}
+								if (m.message == WM_COMMAND) {
+									if (LOWORD(m.wParam) == IDOK) {
+										GetWindowTextA(hEdit, s_presetName, sizeof(s_presetName));
+										if (s_presetName[0]) self->onSavePreset(s_presetName);
+										done = true; continue;
+									}
+									if (LOWORD(m.wParam) == IDCANCEL) {
+										done = true; continue;
+									}
+								}
+							}
+							if (m.message == WM_CLOSE || m.message == WM_QUIT) {
+								done = true; continue;
+							}
+							if (!IsDialogMessage(hDlg, &m)) {
+								TranslateMessage(&m);
+								DispatchMessage(&m);
+							}
+						}
+						EnableWindow(hParent, TRUE);
+						SetForegroundWindow(hParent);
+						DestroyWindow(hDlg);
+					}
 					return 0;
 				}
 			}
@@ -1146,6 +1262,33 @@ void BuzzPluginView::updateParamValue(Steinberg::Vst::ParamID id, double normali
 		}
 	}
 	updatingFromHost = false;
+}
+
+void BuzzPluginView::setPresetNames(const std::vector<std::string>& names)
+{
+	if (!hwndPresetCombo) return;
+
+	SendMessage(hwndPresetCombo, CB_RESETCONTENT, 0, 0);
+
+	if (names.empty()) {
+		ShowWindow(hwndPresetLabel, SW_HIDE);
+		ShowWindow(hwndPresetCombo, SW_HIDE);
+		if (hwndSavePresetButton) ShowWindow(hwndSavePresetButton, SW_SHOW);
+		return;
+	}
+
+	// Add "(default)" as first item
+	SendMessageW(hwndPresetCombo, CB_ADDSTRING, 0, (LPARAM)L"(default)");
+
+	for (auto& name : names) {
+		std::wstring wname(name.begin(), name.end());
+		SendMessageW(hwndPresetCombo, CB_ADDSTRING, 0, (LPARAM)wname.c_str());
+	}
+
+	SendMessage(hwndPresetCombo, CB_SETCURSEL, 0, 0);
+	ShowWindow(hwndPresetLabel, SW_SHOW);
+	ShowWindow(hwndPresetCombo, SW_SHOW);
+	if (hwndSavePresetButton) ShowWindow(hwndSavePresetButton, SW_SHOW);
 }
 
 } // namespace BuzzVst

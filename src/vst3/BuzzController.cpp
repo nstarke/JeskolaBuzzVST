@@ -1022,6 +1022,8 @@ bool BuzzController::loadMachineParameters(const std::string& path)
 		activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 	}
 
+	loadPresetsForMachine(path);
+
 	return true;
 }
 
@@ -1131,6 +1133,93 @@ void BuzzController::pushParamInfoToView()
 	activeView->setParamInfo(infos);
 }
 
+void BuzzController::loadPresetsForMachine(const std::string& dllPath)
+{
+	presetLoader.Clear();
+	std::string prsPath = BuzzPresetLoader::FindPrsForDll(dllPath);
+	if (prsPath.empty()) return;
+
+	if (presetLoader.Load(prsPath)) {
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Loaded %d presets from %s\n",
+			(int)presetLoader.GetPresets().size(), prsPath.c_str());
+		OutputDebugStringA(dbg);
+
+		if (activeView) {
+			std::vector<std::string> names;
+			for (auto& p : presetLoader.GetPresets())
+				names.push_back(p.name);
+			activeView->setPresetNames(names);
+		}
+	}
+}
+
+void BuzzController::applyPreset(int presetIndex)
+{
+	auto& presets = presetLoader.GetPresets();
+	if (presetIndex < 0 || presetIndex >= (int)presets.size()) return;
+
+	auto& preset = presets[presetIndex];
+	char dbg[256];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridge] Applying preset '%s' (%d values)\n",
+		preset.name.c_str(), (int)preset.paramValues.size());
+	OutputDebugStringA(dbg);
+
+	// Preset values are stored for STATE params only, in order.
+	// Map them to the controller's param slots.
+	int presetIdx = 0;
+
+	// Global state params
+	for (int i = 0; i < activeGlobalParams && presetIdx < (int)preset.paramValues.size(); i++) {
+		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+		if (!param) continue;
+		int mn = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
+		int stepCount = param->getInfo().stepCount;
+		if (stepCount <= 0) continue;
+
+		int buzzVal = preset.paramValues[presetIdx++];
+		// Clamp to valid range (preset file is untrusted)
+		if (buzzVal < mn) buzzVal = mn;
+		if (buzzVal > mn + stepCount) buzzVal = mn + stepCount;
+		double normalized = (double)(buzzVal - mn) / (double)stepCount;
+		if (normalized < 0.0) normalized = 0.0;
+		if (normalized > 1.0) normalized = 1.0;
+
+		setParamNormalized(kBuzzGlobalParamBase + i, normalized);
+		if (componentHandler) {
+			componentHandler->beginEdit(kBuzzGlobalParamBase + i);
+			componentHandler->performEdit(kBuzzGlobalParamBase + i, normalized);
+			componentHandler->endEdit(kBuzzGlobalParamBase + i);
+		}
+	}
+
+	// Track state params (track 0)
+	for (int i = 0; i < activeTrackParams && presetIdx < (int)preset.paramValues.size(); i++) {
+		ParamID paramId = kBuzzTrackParamBase + i;
+		Parameter* param = parameters.getParameter(paramId);
+		if (!param) continue;
+		int flatIdx = activeGlobalParams + i;
+		int mn = (flatIdx < (int)paramMinValues.size()) ? paramMinValues[flatIdx] : 0;
+		int stepCount = param->getInfo().stepCount;
+		if (stepCount <= 0) continue;
+
+		int buzzVal = preset.paramValues[presetIdx++];
+		// Clamp to valid range (preset file is untrusted)
+		if (buzzVal < mn) buzzVal = mn;
+		if (buzzVal > mn + stepCount) buzzVal = mn + stepCount;
+		double normalized = (double)(buzzVal - mn) / (double)stepCount;
+		if (normalized < 0.0) normalized = 0.0;
+		if (normalized > 1.0) normalized = 1.0;
+
+		setParamNormalized(paramId, normalized);
+		if (componentHandler) {
+			componentHandler->beginEdit(paramId);
+			componentHandler->performEdit(paramId, normalized);
+			componentHandler->endEdit(paramId);
+		}
+	}
+}
+
 void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 {
 	view->onParamBeginEdit = [this](ParamID id) {
@@ -1143,6 +1232,93 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 	view->onParamEndEdit = [this](ParamID id) {
 		endEdit(id);
 	};
+	view->onPresetSelected = [this](int presetIndex) {
+		applyPreset(presetIndex);
+	};
+	view->onSavePreset = [this](const std::string& presetName) {
+		if (currentDllPath.empty() || presetName.empty()) return;
+
+		// Build preset from current parameter values
+		BuzzPreset preset;
+		preset.name = presetName;
+
+		// Collect state param values (globals then tracks)
+		for (int i = 0; i < activeGlobalParams; i++) {
+			Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+			if (!param) continue;
+			int stepCount = param->getInfo().stepCount;
+			if (stepCount <= 0) continue;
+			int mn = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
+			int buzzVal = mn + (int)(param->getNormalized() * stepCount + 0.5);
+			preset.paramValues.push_back(buzzVal);
+		}
+		for (int i = 0; i < activeTrackParams; i++) {
+			Parameter* param = parameters.getParameter(kBuzzTrackParamBase + i);
+			if (!param) continue;
+			int stepCount = param->getInfo().stepCount;
+			if (stepCount <= 0) continue;
+			int flatIdx = activeGlobalParams + i;
+			int mn = (flatIdx < (int)paramMinValues.size()) ? paramMinValues[flatIdx] : 0;
+			int buzzVal = mn + (int)(param->getNormalized() * stepCount + 0.5);
+			preset.paramValues.push_back(buzzVal);
+		}
+
+		// Set machine name if not already set
+		if (presetLoader.GetMachineName().empty()) {
+			presetLoader.SetMachineName(currentMachineName);
+		}
+
+		presetLoader.AddPreset(preset);
+
+		// Save to .prs file
+		std::string prsPath = BuzzPresetLoader::PrsPathForDll(currentDllPath);
+		if (!prsPath.empty() && presetLoader.Save(prsPath)) {
+			OutputDebugStringA("[BuzzBridge] Preset saved OK\n");
+
+			// Backup to OneDrive if it exists, preserving Gear directory structure
+			char profileDir[MAX_PATH] = {};
+			DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
+			if (len > 0 && len < MAX_PATH) {
+				std::string oneDrive = std::string(profileDir) + "\\OneDrive";
+				DWORD attr = GetFileAttributesA(oneDrive.c_str());
+				if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+					// Extract relative path from Gear root (look for \Gear\ in the path)
+					std::string lowerPrs = prsPath;
+					for (auto& c : lowerPrs) c = (char)tolower((unsigned char)c);
+					size_t gearPos = lowerPrs.find("\\gear\\");
+					if (gearPos == std::string::npos) gearPos = lowerPrs.find("/gear/");
+					if (gearPos != std::string::npos) {
+						std::string relPath = prsPath.substr(gearPos); // e.g. \Gear\generators\Machine.prs
+						std::string backupPath = oneDrive + "\\BuzzVST" + relPath;
+
+						// Create directory tree
+						std::string backupDir = backupPath;
+						size_t lastSlash = backupDir.find_last_of("\\/");
+						if (lastSlash != std::string::npos) {
+							backupDir = backupDir.substr(0, lastSlash);
+							CreateDirectoryA((oneDrive + "\\BuzzVST").c_str(), nullptr);
+							CreateDirectoryA((oneDrive + "\\BuzzVST\\Gear").c_str(), nullptr);
+							CreateDirectoryA(backupDir.c_str(), nullptr);
+						}
+
+						if (presetLoader.Save(backupPath)) {
+							char dbg[512];
+							snprintf(dbg, sizeof(dbg), "[BuzzBridge] Preset backup saved to: %s\n", backupPath.c_str());
+							OutputDebugStringA(dbg);
+						}
+					}
+				}
+			}
+
+			// Update combo box
+			if (activeView) {
+				std::vector<std::string> names;
+				for (auto& p : presetLoader.GetPresets())
+					names.push_back(p.name);
+				activeView->setPresetNames(names);
+			}
+		}
+	};
 	view->onDeferredParamUpdate = [this]() {
 		OutputDebugStringA("[BuzzBridge] Controller: deferred param update on UI thread\n");
 		if (activeView) {
@@ -1152,6 +1328,7 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 			if (currentSampleRate > 0) activeView->setSampleRateWarning(currentSampleRate);
 		}
 		pushParamInfoToView();
+		loadPresetsForMachine(currentDllPath);
 		if (componentHandler) {
 			componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 		}
