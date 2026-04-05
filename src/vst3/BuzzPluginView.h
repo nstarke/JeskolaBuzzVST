@@ -48,6 +48,7 @@ public:
 	std::function<void(Steinberg::Vst::ParamID id)> onParamBeginEdit;
 	std::function<void(Steinberg::Vst::ParamID id, double value)> onParamChanged;
 	std::function<void(Steinberg::Vst::ParamID id)> onParamEndEdit;
+	std::function<void(int presetIndex)> onPresetSelected;
 
 	// Update display
 	void setMachineName(const std::string& name);
@@ -60,6 +61,7 @@ public:
 	void showScanningIndicator();
 	void setParamInfo(const std::vector<ParamViewInfo>& params);
 	void updateParamValue(Steinberg::Vst::ParamID id, double normalizedValue);
+	void setPresetNames(const std::vector<std::string>& names);
 
 	// IPlugView
 	Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) SMTG_OVERRIDE;
@@ -129,6 +131,8 @@ private:
 	std::string machineFilter; // current filter text for machine list
 	HWND hwndParamPanel = nullptr;
 	HWND hwndParamLabel = nullptr;
+	HWND hwndPresetCombo = nullptr;
+	HWND hwndPresetLabel = nullptr;
 
 	// Fonts (recreated on scale change)
 	HFONT hBoldFont = nullptr;
@@ -163,6 +167,7 @@ private:
 	static const int kAddTrackButtonID = 1006;
 	static const int kRemoveTrackButtonID = 1007;
 	static const int kFilterEditID = 1008;
+	static const int kPresetComboID = 1009;
 	static const int kParamSliderBaseID = 2000;
 	static const int kParamLabelBaseID = 3000;
 

@@ -1022,6 +1022,8 @@ bool BuzzController::loadMachineParameters(const std::string& path)
 		activeView->setTrackInfo(currentNumTracks, machineMinTracks, machineMaxTracks);
 	}
 
+	loadPresetsForMachine(path);
+
 	return true;
 }
 
@@ -1131,6 +1133,87 @@ void BuzzController::pushParamInfoToView()
 	activeView->setParamInfo(infos);
 }
 
+void BuzzController::loadPresetsForMachine(const std::string& dllPath)
+{
+	presetLoader.Clear();
+	std::string prsPath = BuzzPresetLoader::FindPrsForDll(dllPath);
+	if (prsPath.empty()) return;
+
+	if (presetLoader.Load(prsPath)) {
+		char dbg[256];
+		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Loaded %d presets from %s\n",
+			(int)presetLoader.GetPresets().size(), prsPath.c_str());
+		OutputDebugStringA(dbg);
+
+		if (activeView) {
+			std::vector<std::string> names;
+			for (auto& p : presetLoader.GetPresets())
+				names.push_back(p.name);
+			activeView->setPresetNames(names);
+		}
+	}
+}
+
+void BuzzController::applyPreset(int presetIndex)
+{
+	auto& presets = presetLoader.GetPresets();
+	if (presetIndex < 0 || presetIndex >= (int)presets.size()) return;
+
+	auto& preset = presets[presetIndex];
+	char dbg[256];
+	snprintf(dbg, sizeof(dbg), "[BuzzBridge] Applying preset '%s' (%d values)\n",
+		preset.name.c_str(), (int)preset.paramValues.size());
+	OutputDebugStringA(dbg);
+
+	// Preset values are stored for STATE params only, in order.
+	// Map them to the controller's param slots.
+	int presetIdx = 0;
+
+	// Global state params
+	for (int i = 0; i < activeGlobalParams && presetIdx < (int)preset.paramValues.size(); i++) {
+		Parameter* param = parameters.getParameter(kBuzzGlobalParamBase + i);
+		if (!param) continue;
+		int mn = (i < (int)paramMinValues.size()) ? paramMinValues[i] : 0;
+		int stepCount = param->getInfo().stepCount;
+		if (stepCount <= 0) continue;
+
+		int buzzVal = preset.paramValues[presetIdx++];
+		double normalized = (double)(buzzVal - mn) / (double)stepCount;
+		if (normalized < 0.0) normalized = 0.0;
+		if (normalized > 1.0) normalized = 1.0;
+
+		setParamNormalized(kBuzzGlobalParamBase + i, normalized);
+		if (componentHandler) {
+			componentHandler->beginEdit(kBuzzGlobalParamBase + i);
+			componentHandler->performEdit(kBuzzGlobalParamBase + i, normalized);
+			componentHandler->endEdit(kBuzzGlobalParamBase + i);
+		}
+	}
+
+	// Track state params (track 0)
+	for (int i = 0; i < activeTrackParams && presetIdx < (int)preset.paramValues.size(); i++) {
+		ParamID paramId = kBuzzTrackParamBase + i;
+		Parameter* param = parameters.getParameter(paramId);
+		if (!param) continue;
+		int flatIdx = activeGlobalParams + i;
+		int mn = (flatIdx < (int)paramMinValues.size()) ? paramMinValues[flatIdx] : 0;
+		int stepCount = param->getInfo().stepCount;
+		if (stepCount <= 0) continue;
+
+		int buzzVal = preset.paramValues[presetIdx++];
+		double normalized = (double)(buzzVal - mn) / (double)stepCount;
+		if (normalized < 0.0) normalized = 0.0;
+		if (normalized > 1.0) normalized = 1.0;
+
+		setParamNormalized(paramId, normalized);
+		if (componentHandler) {
+			componentHandler->beginEdit(paramId);
+			componentHandler->performEdit(paramId, normalized);
+			componentHandler->endEdit(paramId);
+		}
+	}
+}
+
 void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 {
 	view->onParamBeginEdit = [this](ParamID id) {
@@ -1143,6 +1226,9 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 	view->onParamEndEdit = [this](ParamID id) {
 		endEdit(id);
 	};
+	view->onPresetSelected = [this](int presetIndex) {
+		applyPreset(presetIndex);
+	};
 	view->onDeferredParamUpdate = [this]() {
 		OutputDebugStringA("[BuzzBridge] Controller: deferred param update on UI thread\n");
 		if (activeView) {
@@ -1152,6 +1238,7 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 			if (currentSampleRate > 0) activeView->setSampleRateWarning(currentSampleRate);
 		}
 		pushParamInfoToView();
+		loadPresetsForMachine(currentDllPath);
 		if (componentHandler) {
 			componentHandler->restartComponent(kParamTitlesChanged | kParamValuesChanged | kMidiCCAssignmentChanged);
 		}

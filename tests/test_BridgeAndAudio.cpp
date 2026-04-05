@@ -9,6 +9,7 @@
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/buzz/BuzzMDKHelper.h"
 #include "../src/buzz/BuzzOscTables.h"
+#include "../src/buzz/BuzzPresetLoader.h"
 #include "../src/vst3/ParameterMapping.h"
 #include "../src/buzz/MachineInterface.h"
 #include <cstring>
@@ -596,4 +597,79 @@ TEST(WaveTableAuto, ClearAllSlots) {
         ASSERT_FALSE(wt.IsLoaded(i));
     }
     ASSERT_EQ(wt.GetFreeWave(), 1);
+}
+
+// ============================================================================
+// 15. Preset loader
+// ============================================================================
+
+TEST(PresetLoader, FindPrsForDllNoFile) {
+    std::string prs = BuzzPresetLoader::FindPrsForDll(
+        "C:\\nonexistent\\path\\machine.dll");
+    ASSERT_TRUE(prs.empty());
+}
+
+TEST(PresetLoader, FindPrsEmptyPath) {
+    ASSERT_TRUE(BuzzPresetLoader::FindPrsForDll("").empty());
+    ASSERT_TRUE(BuzzPresetLoader::FindPrsForDll("abc").empty());
+}
+
+TEST(PresetLoader, LoadNonexistent) {
+    BuzzPresetLoader loader;
+    ASSERT_FALSE(loader.Load("C:\\nonexistent\\file.prs"));
+    ASSERT_EQ(loader.GetPresets().size(), 0u);
+}
+
+TEST(PresetLoader, LoadErsBlippPresets) {
+    std::string prs = BuzzPresetLoader::FindPrsForDll(
+        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+    if (prs.empty()) return; // skip if not present
+
+    BuzzPresetLoader loader;
+    ASSERT_TRUE(loader.Load(prs));
+    ASSERT_GT(loader.GetPresets().size(), 0u);
+    ASSERT_EQ(loader.GetMachineName(), std::string("ErsBlipp"));
+
+    for (auto& p : loader.GetPresets()) {
+        ASSERT_FALSE(p.name.empty());
+        ASSERT_GT(p.paramValues.size(), 0u);
+    }
+}
+
+TEST(PresetLoader, LoadCyanPhasePresets) {
+    std::string prs = BuzzPresetLoader::FindPrsForDll(
+        "C:\\Users\\nick\\Buzz\\Gear\\generators\\CyanPhase Slide Flute.dll");
+    if (prs.empty()) return;
+
+    BuzzPresetLoader loader;
+    ASSERT_TRUE(loader.Load(prs));
+
+    bool hasComment = false;
+    for (auto& p : loader.GetPresets()) {
+        if (!p.comment.empty()) hasComment = true;
+    }
+    ASSERT_TRUE(hasComment);
+}
+
+TEST(PresetLoader, ClearResets) {
+    BuzzPresetLoader loader;
+    std::string prs = BuzzPresetLoader::FindPrsForDll(
+        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+    if (!prs.empty()) loader.Load(prs);
+    loader.Clear();
+    ASSERT_EQ(loader.GetPresets().size(), 0u);
+    ASSERT_TRUE(loader.GetMachineName().empty());
+}
+
+TEST(PresetLoader, PresetParamCountMatchesStateParams) {
+    // ErsBlipp has 6 track params, 5 with MPF_STATE. Presets should have 5 values.
+    std::string prs = BuzzPresetLoader::FindPrsForDll(
+        "C:\\Users\\nick\\Buzz\\Gear\\generators\\ErsBlipp.dll");
+    if (prs.empty()) return;
+
+    BuzzPresetLoader loader;
+    loader.Load(prs);
+    for (auto& p : loader.GetPresets()) {
+        ASSERT_EQ(p.paramValues.size(), 5u);
+    }
 }

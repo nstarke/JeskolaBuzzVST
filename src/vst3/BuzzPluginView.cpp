@@ -364,6 +364,20 @@ void BuzzPluginView::createControls(HWND parent)
 	setTrackInfo(currentTracks, minTracks, maxTracks);
 	y += S(28);
 
+	// Preset combo box
+	hwndPresetLabel = CreateWindowExW(0, L"STATIC", L"Preset:",
+		WS_CHILD | SS_LEFT,
+		innerMargin, y + S(2), S(45), S(16), hwndContainer, nullptr, hInst, nullptr);
+	SendMessage(hwndPresetLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+	hwndPresetCombo = CreateWindowExW(0, L"COMBOBOX", L"",
+		WS_CHILD | CBS_DROPDOWNLIST | WS_VSCROLL,
+		innerMargin + S(48), y, w - 2 * innerMargin - S(48), S(200),
+		hwndContainer, (HMENU)(INT_PTR)kPresetComboID, hInst, nullptr);
+	SendMessage(hwndPresetCombo, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+	// Hidden until presets are loaded
+	y += S(28);
+
 	// Parameters label
 	hwndParamLabel = CreateWindowExW(0, L"STATIC", L"Parameters",
 		WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -462,6 +476,13 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 				if (id == kRemoveTrackButtonID && code == BN_CLICKED) {
 					if (self->onTrackCountChanged && self->currentTracks > self->minTracks)
 						self->onTrackCountChanged(-1);
+					return 0;
+				}
+				if (id == kPresetComboID && code == CBN_SELCHANGE) {
+					int sel = (int)SendMessage(self->hwndPresetCombo, CB_GETCURSEL, 0, 0);
+					// sel 0 = "(default)", 1+ = preset index 0+
+					if (sel > 0 && self->onPresetSelected)
+						self->onPresetSelected(sel - 1);
 					return 0;
 				}
 			}
@@ -1146,6 +1167,31 @@ void BuzzPluginView::updateParamValue(Steinberg::Vst::ParamID id, double normali
 		}
 	}
 	updatingFromHost = false;
+}
+
+void BuzzPluginView::setPresetNames(const std::vector<std::string>& names)
+{
+	if (!hwndPresetCombo) return;
+
+	SendMessage(hwndPresetCombo, CB_RESETCONTENT, 0, 0);
+
+	if (names.empty()) {
+		ShowWindow(hwndPresetLabel, SW_HIDE);
+		ShowWindow(hwndPresetCombo, SW_HIDE);
+		return;
+	}
+
+	// Add "(default)" as first item
+	SendMessageW(hwndPresetCombo, CB_ADDSTRING, 0, (LPARAM)L"(default)");
+
+	for (auto& name : names) {
+		std::wstring wname(name.begin(), name.end());
+		SendMessageW(hwndPresetCombo, CB_ADDSTRING, 0, (LPARAM)wname.c_str());
+	}
+
+	SendMessage(hwndPresetCombo, CB_SETCURSEL, 0, 0);
+	ShowWindow(hwndPresetLabel, SW_SHOW);
+	ShowWindow(hwndPresetCombo, SW_SHOW);
 }
 
 } // namespace BuzzVst
