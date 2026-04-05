@@ -11,6 +11,7 @@
 #include "../src/buzz/BuzzOscTables.h"
 #include "../src/buzz/BuzzPresetLoader.h"
 #include "../src/vst3/ParameterMapping.h"
+#include "../src/vst3/GearScanner.h"
 #include "../src/buzz/MachineInterface.h"
 #include <windows.h>
 #include <cstring>
@@ -1226,4 +1227,107 @@ TEST(BridgeSharedMemIO, AudioBufferFullWrite) {
     ASSERT_EQ(audio->outputRight[100], 200.0f);
 
     mem.Close();
+}
+
+// ============================================================================
+// 20. Remaining coverage gaps
+// ============================================================================
+
+TEST(BuzzCallbacksExtra, GetTPBDefault) {
+    BuzzCallbacks cb;
+    ASSERT_EQ(cb.GetTPB(), 4);
+}
+
+TEST(BuzzCallbacksExtra, GetTPBFromMasterInfo) {
+    BuzzCallbacks cb;
+    CMasterInfo mi = {};
+    mi.TicksPerBeat = 8;
+    cb.masterInfoPtr = &mi;
+    ASSERT_EQ(cb.GetTPB(), 8);
+}
+
+TEST(BuzzCallbacksExtra, GetTempoDefault) {
+    BuzzCallbacks cb;
+    ASSERT_EQ(cb.GetTempo(), 125);
+}
+
+TEST(BuzzCallbacksExtra, GetTempoFromMasterInfo) {
+    BuzzCallbacks cb;
+    CMasterInfo mi = {};
+    mi.BeatsPerMin = 140;
+    cb.masterInfoPtr = &mi;
+    ASSERT_EQ(cb.GetTempo(), 140);
+}
+
+TEST(OscTablesExtra, InitializeIdempotent) {
+    BuzzOscTables::Initialize();
+    const short* sine1 = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_NOT_NULL(sine1);
+    short saved = sine1[512];
+
+    BuzzOscTables::Initialize();
+    const short* sine2 = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_EQ(sine1, sine2);
+    ASSERT_EQ(sine2[512], saved);
+}
+
+TEST(OscTablesExtra, AllWaveformsDistinct) {
+    const short* tables[BUZZ_NUM_WAVEFORMS];
+    for (int w = 0; w < BUZZ_NUM_WAVEFORMS; w++) {
+        tables[w] = BuzzOscTables::GetTable(w);
+        ASSERT_NOT_NULL(tables[w]);
+    }
+    for (int a = 0; a < BUZZ_NUM_WAVEFORMS; a++) {
+        for (int b = a + 1; b < BUZZ_NUM_WAVEFORMS; b++) {
+            int diffs = 0;
+            for (int i = 0; i < 2048; i++) {
+                if (tables[a][i] != tables[b][i]) diffs++;
+            }
+            CHECK_TRUE(diffs > 200);
+        }
+    }
+}
+
+TEST(GearScannerExtra, GeneratorTypeIsCorrect) {
+    GearScanner scanner;
+    std::string gearDir = GetGearPath("");
+    if (gearDir.empty()) return;
+    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
+        gearDir.pop_back();
+    if (!scanner.Scan(gearDir)) return;
+
+    for (auto& g : scanner.GetGenerators()) {
+        CHECK_TRUE(g.machineType == MT_GENERATOR);
+        CHECK_TRUE(!g.dllPath.empty());
+        CHECK_TRUE(!g.displayName.empty());
+    }
+}
+
+TEST(GearScannerExtra, EffectTypeIsCorrect) {
+    GearScanner scanner;
+    std::string gearDir = GetGearPath("");
+    if (gearDir.empty()) return;
+    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
+        gearDir.pop_back();
+    if (!scanner.Scan(gearDir)) return;
+
+    for (auto& f : scanner.GetEffects()) {
+        CHECK_TRUE(f.machineType == MT_EFFECT);
+        CHECK_TRUE(!f.dllPath.empty());
+        CHECK_TRUE(!f.displayName.empty());
+    }
+}
+
+TEST(GearScannerExtra, GeneratorAndEffectCountsSumToTotal) {
+    GearScanner scanner;
+    std::string gearDir = GetGearPath("");
+    if (gearDir.empty()) return;
+    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
+        gearDir.pop_back();
+    if (!scanner.Scan(gearDir)) return;
+
+    auto total = scanner.GetEntries().size();
+    auto gens = scanner.GetGenerators().size();
+    auto fxs = scanner.GetEffects().size();
+    ASSERT_EQ(gens + fxs, total);
 }
