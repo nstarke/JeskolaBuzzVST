@@ -164,7 +164,7 @@ TEST(BridgeIPC, CommandEnumValues) {
     ASSERT_EQ((uint32_t)kCmdLoadWave, 13u);
     ASSERT_EQ((uint32_t)kCmdClearWaves, 14u);
     ASSERT_EQ((uint32_t)kCmdSetNumTracks, 15u);
-    ASSERT_EQ((uint32_t)kCmdShutdown, 16u);
+    ASSERT_EQ((uint32_t)kCmdShutdown, 17u);
 }
 
 TEST(BridgeIPC, ResponseEnumValues) {
@@ -1185,7 +1185,7 @@ TEST(ParamIDs, GlobalParamBase) {
 }
 
 TEST(ParamIDs, MaxGlobalParams) {
-    ASSERT_EQ(kMaxGlobalParams, 128);
+    ASSERT_EQ(kMaxGlobalParams, 64);
 }
 
 TEST(ParamIDs, TrackParamBase) {

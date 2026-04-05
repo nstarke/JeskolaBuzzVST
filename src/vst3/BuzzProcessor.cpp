@@ -268,6 +268,7 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 #endif
 			samplesUntilNextTick = samplesPerTick;
 			firstTick = false;
+			stateJustRestored = false;
 
 			// Apply deferred note-off (from a short gate where note-off arrived
 			// before the note-on was ticked)
@@ -314,6 +315,11 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 
 void BuzzProcessor::processParameterChanges(IParameterChanges* changes)
 {
+	// After setState, ignore host parameter pushes — the processor already
+	// has the correct saved values.  The host may push stale defaults from
+	// the controller (which can't load 32-bit DLLs to get param info).
+	if (stateJustRestored) return;
+
 	int32 numParamsChanged = changes->getParameterCount();
 
 	for (int32 i = 0; i < numParamsChanged; i++) {
@@ -857,6 +863,16 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 		snprintf(dbg, sizeof(dbg), "[BuzzBridge] Note slots: gNote=%d gVel=%d tNote=%d tVel=%d\n",
 			bridgeGlobalNoteSlot, bridgeGlobalVelSlot, bridgeTrackNoteSlot, bridgeTrackVelSlot);
 		OutputDebugStringA(dbg);
+
+		// Dump all params for debugging sample-based machines
+		for (int i = 0; i < (int)paramInfos.size(); i++) {
+			auto& pi = paramInfos[i];
+			const char* group = (i < numGlobal) ? "G" : "T";
+			int idx = (i < numGlobal) ? i : i - numGlobal;
+			snprintf(dbg, sizeof(dbg), "[BuzzBridge] Param %s[%d] '%s': type=%d min=%d max=%d noVal=%d def=%d\n",
+				group, idx, pi.name, pi.type, pi.minValue, pi.maxValue, pi.noValue, pi.defValue);
+			OutputDebugStringA(dbg);
+		}
 	}
 
 	firstTick = true;
@@ -1057,40 +1073,47 @@ tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 	}
 
 	firstTick = true; // Ensure saved values get sent on next tick
+	stateJustRestored = true; // Ignore host param pushes until first tick
 
 	// Restore wave table
 	Steinberg::int32 numWaves = 0;
 	if (streamer.readInt32(numWaves) && numWaves > 0) {
-		// Clamp to sane range (max 200 wave slots in Buzz)
 		if (numWaves > kMaxWaveSlots) numWaves = kMaxWaveSlots;
 
-		auto* waveTable = loader.GetWaveTable();
-		if (waveTable) {
-			for (Steinberg::int32 i = 0; i < numWaves; i++) {
-				Steinberg::int32 slotIdx = 0;
-				if (!streamer.readInt32(slotIdx)) break;
+		for (Steinberg::int32 i = 0; i < numWaves; i++) {
+			Steinberg::int32 slotIdx = 0;
+			if (!streamer.readInt32(slotIdx)) break;
 
-				Steinberg::int32 pLen = 0;
-				if (!streamer.readInt32(pLen)) break;
+			Steinberg::int32 pLen = 0;
+			if (!streamer.readInt32(pLen)) break;
 
-				// Validate slot index and path length
-				if (slotIdx < WAVE_MIN || slotIdx > WAVE_MAX) {
-					// Skip this entry's path data
-					if (pLen > 0 && pLen < 32768) {
-						char skip[32768];
-						streamer.readRaw(skip, pLen);
-					}
-					continue;
+			if (slotIdx < WAVE_MIN || slotIdx > WAVE_MAX) {
+				if (pLen > 0 && pLen < 32768) {
+					char skip[32768];
+					streamer.readRaw(skip, pLen);
 				}
-				if (pLen <= 0 || pLen >= 4096) continue;
+				continue;
+			}
+			if (pLen <= 0 || pLen >= 4096) continue;
 
-				char wavBuf[4096] = {};
-				if (streamer.readRaw(wavBuf, pLen) == pLen) {
-					wavBuf[pLen] = 0;
-					waveTable->LoadWav(slotIdx, wavBuf);
+			char wavBuf[4096] = {};
+			if (streamer.readRaw(wavBuf, pLen) == pLen) {
+				wavBuf[pLen] = 0;
+				std::string wavPath(wavBuf);
+#ifdef BUZZVST_64BIT
+				if (bridge.IsRunning()) {
+					bridge.LoadWave(slotIdx, wavPath);
 				}
+				loadedWavePaths.push_back({slotIdx, wavPath});
+#else
+				auto* waveTable = loader.GetWaveTable();
+				if (waveTable) waveTable->LoadWav(slotIdx, wavPath);
+#endif
 			}
 		}
+
+		// Notify controller of restored wave slot names
+		sendWaveSlotsToController();
 	}
 
 	return kResultOk;
@@ -1131,6 +1154,17 @@ tresult PLUGIN_API BuzzProcessor::getState(IBStream* state)
 	}
 
 	// Write wave table paths
+#ifdef BUZZVST_64BIT
+	Steinberg::int32 numWaves = (Steinberg::int32)loadedWavePaths.size();
+	streamer.writeInt32(numWaves);
+	for (auto& wp : loadedWavePaths) {
+		streamer.writeInt32(wp.slotIndex);
+		Steinberg::int32 pLen = (Steinberg::int32)wp.filePath.size();
+		streamer.writeInt32(pLen);
+		if (pLen > 0)
+			streamer.writeRaw((void*)wp.filePath.c_str(), pLen);
+	}
+#else
 	auto wavePaths = loader.GetWaveTable()->GetLoadedPaths();
 	Steinberg::int32 numWaves = (Steinberg::int32)wavePaths.size();
 	streamer.writeInt32(numWaves);
@@ -1141,6 +1175,7 @@ tresult PLUGIN_API BuzzProcessor::getState(IBStream* state)
 		if (pLen > 0)
 			streamer.writeRaw((void*)wp.filePath.c_str(), pLen);
 	}
+#endif
 
 	return kResultOk;
 }
@@ -1223,11 +1258,126 @@ void BuzzProcessor::sendMachineLoadedToController()
 			paramBlob.data(), (Steinberg::uint32)paramBlob.size());
 	}
 
+	// Encode value descriptions for enum-like params (stepCount <= 64).
+	// Format: numEntries (int32), then for each: paramIndex (int32),
+	//   numValues (int32), then for each value: descLen (int32) + descString
+	std::vector<char> descBlob;
+	auto appendDescInt = [&](int32_t v) {
+		descBlob.insert(descBlob.end(), (char*)&v, (char*)&v + 4);
+	};
+	int32_t numDescEntries = 0;
+	size_t numEntriesOffset = descBlob.size();
+	appendDescInt(0); // placeholder
+
+#ifdef BUZZVST_64BIT
+	for (int p = 0; p < (int)bridgeParamInfos.size(); p++) {
+		auto& pi = bridgeParamInfos[p];
+		int range = pi.maxValue - pi.minValue;
+		if (range <= 0 || range > 64) continue;
+
+		std::vector<std::string> descs(range + 1);
+		bool hasAny = false;
+		for (int v = pi.minValue; v <= pi.maxValue; v++) {
+			std::string d = bridge.DescribeValue(p, v);
+			if (!d.empty()) { descs[v - pi.minValue] = d; hasAny = true; }
+		}
+		if (!hasAny) continue;
+
+		appendDescInt(p);
+		appendDescInt(range + 1);
+		for (auto& d : descs) {
+			int32_t dLen = (int32_t)d.size();
+			appendDescInt(dLen);
+			if (dLen > 0) descBlob.insert(descBlob.end(), d.begin(), d.end());
+		}
+		numDescEntries++;
+	}
+#else
+	{
+		auto* machine = loader.GetMachine();
+		auto* layout = loader.GetParamLayout();
+		if (machine && layout) {
+			auto& gSlots = layout->GetGlobalSlots();
+			auto& tSlots = layout->GetTrackSlots();
+			int totalP = (int)(gSlots.size() + tSlots.size());
+			for (int p = 0; p < totalP; p++) {
+				const CMachineParameter* bp = (p < (int)gSlots.size())
+					? gSlots[p].param : tSlots[p - gSlots.size()].param;
+				int range = bp->MaxValue - bp->MinValue;
+				if (range <= 0 || range > 64) continue;
+
+				std::vector<std::string> descs(range + 1);
+				bool hasAny = false;
+				for (int v = bp->MinValue; v <= bp->MaxValue; v++) {
+					const char* d = nullptr;
+					SEH_Call([&]() { d = machine->DescribeValue(p, v); });
+					if (d && d[0]) { descs[v - bp->MinValue] = d; hasAny = true; }
+				}
+				if (!hasAny) continue;
+
+				appendDescInt(p);
+				appendDescInt(range + 1);
+				for (auto& d : descs) {
+					int32_t dLen = (int32_t)d.size();
+					appendDescInt(dLen);
+					if (dLen > 0) descBlob.insert(descBlob.end(), d.begin(), d.end());
+				}
+				numDescEntries++;
+			}
+		}
+	}
+#endif
+
+	// Patch the entry count
+	memcpy(descBlob.data() + numEntriesOffset, &numDescEntries, 4);
+	if (numDescEntries > 0) {
+		msg->getAttributes()->setBinary("ValueDescs",
+			descBlob.data(), (Steinberg::uint32)descBlob.size());
+	}
+
 	sendMessage(msg);
 }
 
 void BuzzProcessor::sendWaveSlotsToController()
 {
+#ifdef BUZZVST_64BIT
+	// In 64-bit mode, the wave table lives in the bridge host.
+	// Use loadedWavePaths to build slot names for the GUI.
+	int maxSlot = 16;
+	for (auto& entry : loadedWavePaths) {
+		if (entry.slotIndex > maxSlot) maxSlot = entry.slotIndex;
+	}
+
+	std::vector<char> payload;
+	int32_t numSlots = maxSlot;
+	payload.insert(payload.end(), (char*)&numSlots, (char*)&numSlots + sizeof(numSlots));
+
+	for (int i = 1; i <= maxSlot; i++) {
+		std::string name;
+		for (auto& entry : loadedWavePaths) {
+			if (entry.slotIndex == i) {
+				// Extract filename from path
+				size_t lastSlash = entry.filePath.find_last_of("\\/");
+				name = (lastSlash != std::string::npos)
+					? entry.filePath.substr(lastSlash + 1) : entry.filePath;
+				// Strip extension
+				size_t dot = name.find_last_of('.');
+				if (dot != std::string::npos) name = name.substr(0, dot);
+				break;
+			}
+		}
+		int32_t nameLen = (int32_t)name.size();
+		payload.insert(payload.end(), (char*)&nameLen, (char*)&nameLen + sizeof(nameLen));
+		if (nameLen > 0)
+			payload.insert(payload.end(), name.begin(), name.end());
+	}
+
+	if (auto msg = owned(allocateMessage())) {
+		msg->setMessageID("BuzzWaveSlots");
+		msg->getAttributes()->setBinary("Slots", payload.data(), (Steinberg::uint32)payload.size());
+		sendMessage(msg);
+	}
+#else
 	auto* waveTable = loader.GetWaveTable();
 	if (!waveTable) return;
 
@@ -1256,6 +1406,7 @@ void BuzzProcessor::sendWaveSlotsToController()
 		msg->getAttributes()->setBinary("Slots", payload.data(), (Steinberg::uint32)payload.size());
 		sendMessage(msg);
 	}
+#endif
 }
 
 tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
@@ -1392,21 +1543,32 @@ tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 			int32_t numPaths = *(const int32_t*)ptr;
 			ptr += sizeof(int32_t);
 
-			auto* waveTable = loader.GetWaveTable();
-			if (waveTable) {
-				for (int32_t i = 0; i < numPaths; i++) {
-					if ((ptr - (const char*)data) + 4 > (int)size) break;
-					int32_t pathLen = *(const int32_t*)ptr;
-					ptr += sizeof(int32_t);
-					if (pathLen <= 0 || (ptr - (const char*)data) + pathLen > (int)size) break;
+			for (int32_t i = 0; i < numPaths; i++) {
+				if ((ptr - (const char*)data) + 4 > (int)size) break;
+				int32_t pathLen = *(const int32_t*)ptr;
+				ptr += sizeof(int32_t);
+				if (pathLen <= 0 || (ptr - (const char*)data) + pathLen > (int)size) break;
 
-					std::string wavPath(ptr, pathLen);
-					ptr += pathLen;
+				std::string wavPath(ptr, pathLen);
+				ptr += pathLen;
 
-					waveTable->LoadWavAuto(wavPath);
+#ifdef BUZZVST_64BIT
+				{
+					// Find first free slot (1-based, like BuzzWaveTable::GetFreeWave)
+					int freeSlot = 1;
+					for (auto& entry : loadedWavePaths) {
+						if (entry.slotIndex >= freeSlot) freeSlot = entry.slotIndex + 1;
+					}
+					if (bridge.LoadWave(freeSlot, wavPath)) {
+						loadedWavePaths.push_back({freeSlot, wavPath});
+					}
 				}
-				sendWaveSlotsToController();
+#else
+				auto* waveTable = loader.GetWaveTable();
+				if (waveTable) waveTable->LoadWavAuto(wavPath);
+#endif
 			}
+			sendWaveSlotsToController();
 		}
 		return kResultOk;
 	}
@@ -1423,11 +1585,25 @@ tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 
 			if (pathLen > 0 && (int)(ptr - (const char*)data) + pathLen <= (int)size) {
 				std::string wavPath(ptr, pathLen);
+#ifdef BUZZVST_64BIT
+				// Send wave to the bridge host (which has the actual wave table)
+				OutputDebugStringA("[BuzzBridge] Loading wave via bridge\n");
+				if (bridge.LoadWave(slotIdx, wavPath)) {
+					// Track for state persistence
+					// Remove existing entry for this slot
+					loadedWavePaths.erase(
+						std::remove_if(loadedWavePaths.begin(), loadedWavePaths.end(),
+							[slotIdx](const WavePathEntry& e) { return e.slotIndex == slotIdx; }),
+						loadedWavePaths.end());
+					loadedWavePaths.push_back({slotIdx, wavPath});
+				}
+#else
 				auto* waveTable = loader.GetWaveTable();
 				if (waveTable) {
 					waveTable->LoadWav(slotIdx, wavPath);
-					sendWaveSlotsToController();
 				}
+#endif
+				sendWaveSlotsToController();
 			}
 		}
 		return kResultOk;

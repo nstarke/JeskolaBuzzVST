@@ -14,12 +14,12 @@ static const Steinberg::FUID kBuzzGeneratorControllerUID(0x4A45534B, 0x4F4C4142,
 static const Steinberg::FUID kBuzzEffectControllerUID   (0x4A45534B, 0x4F4C4142, 0x555A5A46, 0x43544C32);
 
 // Parameter ID ranges
-// IDs 1..128 are Buzz global parameters (pre-allocated, hidden until loaded)
+// IDs 1..64 are Buzz global parameters (pre-allocated)
 // IDs 1000+T*1000..1000+T*1000+63 are Buzz track T parameters
 //   Track 0: 1000-1063, Track 1: 2000-2063, ..., Track 15: 16000-16063
 enum ReservedParamIDs {
 	kBuzzGlobalParamBase = 1,
-	kMaxGlobalParams = 128,
+	kMaxGlobalParams = 64,
 	kBuzzTrackParamBase = 1000,
 	kTrackParamStride = 1000,     // ID spacing between tracks
 	kMaxTrackParams = 64,         // max params per track

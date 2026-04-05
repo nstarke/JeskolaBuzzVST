@@ -18,7 +18,10 @@ struct ParamViewInfo {
 	Steinberg::Vst::ParamID paramId;
 	std::string name;
 	int32_t stepCount;
+	int32_t minValue = 0;  // Buzz min value (for computing raw value from normalized)
 	double normalizedValue;
+	// Value descriptions for enum-like params (indexed by raw Buzz value - minValue)
+	std::vector<std::string> valueDescriptions;
 };
 
 // Native Win32 GUI for selecting a Buzz machine DLL.
@@ -84,8 +87,11 @@ private:
 	struct ParamControl {
 		HWND hwndLabel = nullptr;
 		HWND hwndTrackbar = nullptr;
+		HWND hwndValueLabel = nullptr;
 		Steinberg::Vst::ParamID paramId = 0;
 		int32_t stepCount = 0;
+		int32_t minValue = 0;
+		std::vector<std::string> valueDescriptions;
 	};
 
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
