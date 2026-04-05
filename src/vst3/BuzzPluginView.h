@@ -147,6 +147,10 @@ private:
 	std::vector<GearEntry> gearEntries;
 	bool isGenerator;
 	float scaleFactor = 1.0f;
+	int viewHeight = 0;     // clamped height reported to host (may be < container)
+	int contentHeight = 0;  // full layout height of the container
+	int scrollY = 0;        // current scroll offset
+	void updateScroll();    // recalculate scroll range and clamp position
 	std::atomic<bool> scanning{false};
 	std::thread scanThread;
 

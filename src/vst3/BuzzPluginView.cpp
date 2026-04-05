@@ -74,10 +74,25 @@ tresult PLUGIN_API BuzzPluginView::isPlatformTypeSupported(FIDString type)
 tresult PLUGIN_API BuzzPluginView::getSize(ViewRect* size)
 {
 	if (!size) return kInvalidArgument;
+
+	contentHeight = S(kBaseHeight);
+	int maxH = contentHeight;
+
+	// Cap to screen work area so the window doesn't extend off-screen
+	RECT workArea = {};
+	if (SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0)) {
+		int screenH = workArea.bottom - workArea.top;
+		// Leave room for title bar / taskbar (~80px)
+		int available = screenH - 80;
+		if (available > 0 && maxH > available)
+			maxH = available;
+	}
+
+	viewHeight = maxH;
 	size->left = 0;
 	size->top = 0;
 	size->right = S(kBaseWidth);
-	size->bottom = S(kBaseHeight);
+	size->bottom = viewHeight;
 	return kResultOk;
 }
 
@@ -91,8 +106,10 @@ tresult PLUGIN_API BuzzPluginView::setContentScaleFactor(ScaleFactor factor)
 
 	scaleFactor = factor;
 
-	// Update the rect
-	ViewRect r(0, 0, S(kBaseWidth), S(kBaseHeight));
+	// Recompute capped height
+	ViewRect sizeRect;
+	getSize(&sizeRect);
+	ViewRect r(0, 0, sizeRect.right, sizeRect.bottom);
 	setRect(r);
 
 	// If attached, recreate all controls at the new scale
@@ -134,7 +151,9 @@ tresult PLUGIN_API BuzzPluginView::attached(void* parent, FIDString type)
 
 	// If DPI was detected, update our rect and ask the host to resize
 	if (dpiChanged) {
-		ViewRect r(0, 0, S(kBaseWidth), S(kBaseHeight));
+		ViewRect sizeRect;
+		getSize(&sizeRect);
+		ViewRect r(0, 0, sizeRect.right, sizeRect.bottom);
 		setRect(r);
 		if (plugFrame) {
 			plugFrame->resizeView(this, &r);
@@ -254,7 +273,14 @@ void BuzzPluginView::createControls(HWND parent)
 	createFonts();
 
 	int w = S(kBaseWidth);
-	int h = S(kBaseHeight);
+	int h = S(kBaseHeight);  // full content height (container)
+
+	// Ensure viewHeight is computed
+	if (viewHeight <= 0) {
+		ViewRect sizeRect;
+		getSize(&sizeRect);
+	}
+	contentHeight = h;
 
 	hwndContainer = CreateWindowExW(
 		0, kWindowClassName, L"",
@@ -262,6 +288,9 @@ void BuzzPluginView::createControls(HWND parent)
 		0, 0, w, h,
 		parent, nullptr, hInst, this
 	);
+
+	scrollY = 0;
+	updateScroll();
 
 	int margin = S(10);
 	int y = S(8);
@@ -437,6 +466,33 @@ void BuzzPluginView::createControls(HWND parent)
 	if (!gearEntries.empty()) populateMachineList();
 }
 
+void BuzzPluginView::updateScroll()
+{
+	if (!hwndContainer || !hwndParent) return;
+
+	if (contentHeight > viewHeight && viewHeight > 0) {
+		// Enable scrollbar on the parent (the host-provided HWND)
+		SCROLLINFO si = {};
+		si.cbSize = sizeof(si);
+		si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+		si.nMin = 0;
+		si.nMax = contentHeight - 1;
+		si.nPage = viewHeight;
+		si.nPos = scrollY;
+		SetScrollInfo(hwndParent, SB_VERT, &si, TRUE);
+		ShowScrollBar(hwndParent, SB_VERT, TRUE);
+
+		// Offset the container window upward by scrollY
+		SetWindowPos(hwndContainer, nullptr, 0, -scrollY, 0, 0,
+			SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	} else {
+		ShowScrollBar(hwndParent, SB_VERT, FALSE);
+		scrollY = 0;
+		SetWindowPos(hwndContainer, nullptr, 0, 0, 0, 0,
+			SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	}
+}
+
 LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	if (msg == WM_CREATE) {
@@ -589,15 +645,28 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 			break;
 
 		case WM_MOUSEWHEEL:
-			// Forward mouse wheel to the param panel for scrolling
-			if (self && self->hwndParamPanel) {
-				POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-				ScreenToClient(hWnd, &pt);
-				RECT panelRect;
-				GetWindowRect(self->hwndParamPanel, &panelRect);
-				MapWindowPoints(HWND_DESKTOP, hWnd, (POINT*)&panelRect, 2);
-				if (PtInRect(&panelRect, pt)) {
-					SendMessage(self->hwndParamPanel, WM_MOUSEWHEEL, wParam, lParam);
+			if (self) {
+				// Forward mouse wheel to the param panel if cursor is over it
+				if (self->hwndParamPanel) {
+					POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+					ScreenToClient(hWnd, &pt);
+					RECT panelRect;
+					GetWindowRect(self->hwndParamPanel, &panelRect);
+					MapWindowPoints(HWND_DESKTOP, hWnd, (POINT*)&panelRect, 2);
+					if (PtInRect(&panelRect, pt)) {
+						SendMessage(self->hwndParamPanel, WM_MOUSEWHEEL, wParam, lParam);
+						return 0;
+					}
+				}
+				// Otherwise scroll the whole view if content is taller than viewport
+				if (self->contentHeight > self->viewHeight) {
+					int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+					int oldPos = self->scrollY;
+					int maxScroll = self->contentHeight - self->viewHeight;
+					self->scrollY -= delta / 2;
+					if (self->scrollY < 0) self->scrollY = 0;
+					if (self->scrollY > maxScroll) self->scrollY = maxScroll;
+					if (self->scrollY != oldPos) self->updateScroll();
 					return 0;
 				}
 			}
@@ -636,6 +705,26 @@ LRESULT CALLBACK BuzzPluginView::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 				return 0;
 			}
 			break;
+
+		case WM_VSCROLL:
+			if (self && self->contentHeight > self->viewHeight) {
+				int oldPos = self->scrollY;
+				int maxScroll = self->contentHeight - self->viewHeight;
+				switch (LOWORD(wParam)) {
+					case SB_LINEUP:        self->scrollY -= 20; break;
+					case SB_LINEDOWN:      self->scrollY += 20; break;
+					case SB_PAGEUP:        self->scrollY -= self->viewHeight; break;
+					case SB_PAGEDOWN:      self->scrollY += self->viewHeight; break;
+					case SB_THUMBTRACK:
+					case SB_THUMBPOSITION: self->scrollY = HIWORD(wParam); break;
+				}
+				if (self->scrollY < 0) self->scrollY = 0;
+				if (self->scrollY > maxScroll) self->scrollY = maxScroll;
+				if (self->scrollY != oldPos) self->updateScroll();
+				return 0;
+			}
+			break;
+
 	}
 
 	return DefWindowProcW(hWnd, msg, wParam, lParam);
