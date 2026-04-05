@@ -85,6 +85,7 @@ protected:
 	// Cached note/velocity slot indices for writeNoteToParams (since loader is unavailable)
 	int bridgeGlobalNoteSlot = -1;
 	int bridgeGlobalVelSlot = -1;
+	int bridgeGlobalTrigSlot = -1; // non-state byte trigger in globals (e.g. ld clap Velocity)
 	int bridgeTrackNoteSlot = -1;
 	int bridgeTrackVelSlot = -1;
 	int bridgeTrackTrigSlot = -1; // pt_switch trigger (for machines without pt_note)

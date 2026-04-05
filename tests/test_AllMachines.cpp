@@ -92,6 +92,17 @@ static int testOneGenerator(const char* dllPath) {
             if (tSlots[i].param->Type == pt_switch &&
                 tSlots[i].param->MinValue == 1 && tSlots[i].param->MaxValue == 1) {
                 layout->WriteTrackParam(machine->TrackVals, 0, i, 1);
+                noteTriggered = true;
+                break;
+            }
+        }
+    }
+    // Fallback: non-state global byte/word as velocity trigger (ld clap pattern)
+    if (!noteTriggered && machine->GlobalVals) {
+        for (int i = 0; i < (int)gSlots.size(); i++) {
+            if ((gSlots[i].param->Type == pt_byte || gSlots[i].param->Type == pt_word) &&
+                !(gSlots[i].param->Flags & MPF_STATE)) {
+                layout->WriteGlobalParam(machine->GlobalVals, i, gSlots[i].param->MaxValue);
                 break;
             }
         }

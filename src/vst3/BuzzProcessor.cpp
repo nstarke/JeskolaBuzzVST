@@ -493,11 +493,25 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 		auto& tv = currentTrackValues[0];
 		auto& tp = trackParamChanged[0];
 		if (bridgeTrackTrigSlot < (int)tv.size()) {
-			// Write 1 on note-on, NoValue on note-off
 			if (buzzNote != NOTE_OFF && buzzNote != NOTE_NO) {
 				tv[bridgeTrackTrigSlot] = 1;
 				tp[bridgeTrackTrigSlot] = true;
 			}
+		}
+	}
+	// Fallback: non-state global byte param as velocity trigger (ld clap pattern)
+	if (bridgeGlobalTrigSlot >= 0 && bridgeGlobalTrigSlot < (int)currentGlobalValues.size()) {
+		if (buzzNote != NOTE_OFF && buzzNote != NOTE_NO) {
+			auto& pi = bridgeParamInfos[bridgeGlobalTrigSlot];
+			int trigVal = pi.maxValue; // default to max for full velocity
+			if (velocity >= 0) {
+				trigVal = pi.minValue +
+					(int)((float)velocity / 127.0f * (float)(pi.maxValue - pi.minValue) + 0.5f);
+				if (trigVal < pi.minValue) trigVal = pi.minValue;
+				if (trigVal > pi.maxValue) trigVal = pi.maxValue;
+			}
+			currentGlobalValues[bridgeGlobalTrigSlot] = trigVal;
+			globalParamChanged[bridgeGlobalTrigSlot] = true;
 		}
 	}
 
@@ -505,8 +519,8 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 		static int noteLogCount = 0;
 		if (noteLogCount++ < 5) {
 			char dbg[256];
-			snprintf(dbg, sizeof(dbg), "[BuzzBridge] writeNoteToParams: buzzNote=%d vel=%d gSlot=%d tSlot=%d tTrig=%d\n",
-				buzzNote, velocity, bridgeGlobalNoteSlot, bridgeTrackNoteSlot, bridgeTrackTrigSlot);
+			snprintf(dbg, sizeof(dbg), "[BuzzBridge] writeNoteToParams: buzzNote=%d vel=%d gSlot=%d gTrig=%d tSlot=%d tTrig=%d\n",
+				buzzNote, velocity, bridgeGlobalNoteSlot, bridgeGlobalTrigSlot, bridgeTrackNoteSlot, bridgeTrackTrigSlot);
 			OutputDebugStringA(dbg);
 		}
 	}
@@ -515,16 +529,17 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 
 	// Global params
 	auto& gSlots = layout->GetGlobalSlots();
+	bool foundGlobalNote = false;
 	for (int j = 0; j < (int)gSlots.size(); j++) {
 		if (gSlots[j].param->Type == pt_note) {
 			currentGlobalValues[j] = buzzNote;
 			globalParamChanged[j] = true;
+			foundGlobalNote = true;
 
 			// Route velocity to the associated volume param
 			if (velocity >= 0 && buzzNote != NOTE_OFF) {
 				int velSlot = FindVelocitySlot(gSlots, j);
 				if (velSlot >= 0) {
-					// Scale MIDI velocity (0-127) to the param's range
 					const CMachineParameter* vp = gSlots[velSlot].param;
 					int buzzVel = vp->MinValue +
 						(int)((float)velocity / 127.0f * (float)(vp->MaxValue - vp->MinValue) + 0.5f);
@@ -574,6 +589,25 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 					tp[j] = true;
 					break;
 				}
+			}
+		}
+	}
+	// Global fallback: non-state byte param as velocity trigger (ld clap pattern)
+	if (!foundGlobalNote && buzzNote != NOTE_OFF && buzzNote != NOTE_NO) {
+		for (int j = 0; j < (int)gSlots.size() && j < (int)currentGlobalValues.size(); j++) {
+			if ((gSlots[j].param->Type == pt_byte || gSlots[j].param->Type == pt_word) &&
+			    !(gSlots[j].param->Flags & MPF_STATE)) {
+				const CMachineParameter* vp = gSlots[j].param;
+				int trigVal = vp->MaxValue;
+				if (velocity >= 0) {
+					trigVal = vp->MinValue +
+						(int)((float)velocity / 127.0f * (float)(vp->MaxValue - vp->MinValue) + 0.5f);
+					if (trigVal < vp->MinValue) trigVal = vp->MinValue;
+					if (trigVal > vp->MaxValue) trigVal = vp->MaxValue;
+				}
+				currentGlobalValues[j] = trigVal;
+				globalParamChanged[j] = true;
+				break;
 			}
 		}
 	}
@@ -867,6 +901,7 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	bridgeNumGlobalParams = numGlobal;
 	bridgeGlobalNoteSlot = -1;
 	bridgeGlobalVelSlot = -1;
+	bridgeGlobalTrigSlot = -1;
 	bridgeTrackNoteSlot = -1;
 	bridgeTrackVelSlot = -1;
 	bridgeTrackTrigSlot = -1;
@@ -874,7 +909,6 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 	for (int i = 0; i < numGlobal; i++) {
 		if (paramInfos[i].type == pt_note) {
 			bridgeGlobalNoteSlot = i;
-			// Look for adjacent velocity param
 			if (i + 1 < numGlobal && paramInfos[i + 1].type == pt_byte) {
 				bridgeGlobalVelSlot = i + 1;
 			}
@@ -890,13 +924,25 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 			break;
 		}
 	}
-	// If no pt_note found, look for a pt_switch trigger param in tracks
+	// If no pt_note found anywhere, look for trigger fallbacks
 	if (bridgeTrackNoteSlot < 0 && bridgeGlobalNoteSlot < 0) {
+		// Track: pt_switch trigger (ErsBlipp pattern)
 		for (int i = 0; i < numTrackParams; i++) {
 			auto& pi = paramInfos[numGlobal + i];
 			if (pi.type == pt_switch && pi.minValue == 1 && pi.maxValue == 1) {
 				bridgeTrackTrigSlot = i;
 				break;
+			}
+		}
+		// Global: non-state byte param as velocity trigger (ld clap pattern)
+		// First non-state byte/word param acts as the trigger
+		if (bridgeTrackTrigSlot < 0) {
+			for (int i = 0; i < numGlobal; i++) {
+				auto& pi = paramInfos[i];
+				if ((pi.type == pt_byte || pi.type == pt_word) && !(pi.flags & MPF_STATE)) {
+					bridgeGlobalTrigSlot = i;
+					break;
+				}
 			}
 		}
 	}

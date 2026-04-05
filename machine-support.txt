@@ -80,12 +80,12 @@ Testing 124 generators, 372 effects (skipped 22 VST/Peer)
   Rout SoundFont Loader                    NO AUDIO
   Ruff Speccy II                           ERROR (code=-1073740791)
   Rymix KyrieSpectra                       ERROR (code=-1073740791)
-  Saxpy's HT-700                           OK (max=3031.5)
+  Saxpy's HT-700                           OK (max=3037.7)
   Sgorpi Clap                              NO AUDIO
   Sgorpi's Mean Bassdrum Machine           NO AUDIO
   SuperDonut Ultimate Drum                 NO AUDIO
   Synthrom Sinus v2.0                      NO AUDIO
-  TEH NOISEMAKING                          OK (max=49118.5)
+  TEH NOISEMAKING                          OK (max=49885.8)
   WhiteNoise Scratcher                     NO AUDIO
   Zephod & Thevider WaveEdit               NO AUDIO
   Zephod Blok2009                          OK (max=2156.2)
@@ -125,11 +125,11 @@ size of version 4 soun)
   kejo's Perlin Noise Generator v0.9       NO AUDIO
   ld PadSynth                              OK (max=22331.2)
   ld auricula                              OK (max=13701.4)
-  ld clap                                  NO AUDIO
-  ld cymbal                                NO AUDIO
+  ld clap                                  OK (max=13617.0)
+  ld cymbal                                OK (max=7242.7)
   ld grain                                 NO AUDIO
   ld jacinth2                              ERROR (code=-1073740791)
-  ld snare                                 NO AUDIO
+  ld snare                                 OK (max=25686.4)
   paniq WavEd                              NO AUDIO
   paniq's plutonium                        NO AUDIO
   pooplog 8 stage width modulation synth dual envelope OK (max=12387.5)
@@ -257,8 +257,8 @@ size of version 4 soun)
   Frequency UnKnown Class B                OK (max=3383.5)
   Frequency UnKnown Freq Out               OK (max=16383.9)
   Frequency UnKnown THCMA                  OK (max=0.0)
-  Fuzzpilz Chorpse                         OK (max=10212.5)
-  Fuzzpilz Chorpse Senior                  OK (max=10872.5)
+  Fuzzpilz Chorpse                         OK (max=8386.7)
+  Fuzzpilz Chorpse Senior                  OK (max=6429.6)
   Fuzzpilz Clipper                         OK (max=16383.9)
   Fuzzpilz Drink                           OK (max=16383.9)
   Fuzzpilz Eff Emm                         OK (max=32767.9)
@@ -514,9 +514,9 @@ size of version 4 soun)
   ld grain fx                              NO AUDIO
 
 ========================================
-Results: 361/496 passed
-  Audio OK:    361
-  No audio:    114
+Results: 364/496 passed
+  Audio OK:    364
+  No audio:    111
   Load failed: 1
   Init failed: 0
   Crashed:     16
@@ -589,11 +589,8 @@ Failed machines:
   [GEN] kazuya Graph-64                          NO AUDIO
   [GEN] kazuya JoyControl-4                      ERROR
   [GEN] kejo's Perlin Noise Generator v0.9       NO AUDIO
-  [GEN] ld clap                                  NO AUDIO
-  [GEN] ld cymbal                                NO AUDIO
   [GEN] ld grain                                 NO AUDIO
   [GEN] ld jacinth2                              ERROR
-  [GEN] ld snare                                 NO AUDIO
   [GEN] paniq WavEd                              NO AUDIO
   [GEN] paniq's plutonium                        NO AUDIO
   [GEN] rewire2lnk                               NO AUDIO
