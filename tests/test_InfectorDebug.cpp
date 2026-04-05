@@ -4,26 +4,16 @@
 #include "../src/buzz/BuzzMachineLoader.h"
 #include "../src/buzz/MachineInterface.h"
 #include "../src/common/SEHGuard.h"
+#include "TestHelpers.h"
 #include <cstdio>
 #include <cstring>
 
 using namespace BuzzVst;
 
-static std::string GetRefPath(const char* relPath) {
-    char buf[MAX_PATH];
-    GetModuleFileNameA(NULL, buf, MAX_PATH);
-    std::string base(buf);
-    auto pos = base.rfind('\\');
-    if (pos != std::string::npos) base = base.substr(0, pos);
-    return base + "\\" + relPath;
-}
-
 int main() {
     printf("=== FSM Infector Debug Test ===\n\n");
 
-    char profileDir[MAX_PATH] = {};
-    GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-    std::string path = std::string(profileDir) + "\\Buzz\\Gear\\generators\\FSM Infector.dll";
+    std::string path = GetGearPath("generators\\FSM Infector.dll");
 
     BuzzMachineLoader loader;
     if (!loader.Load(path.c_str())) {

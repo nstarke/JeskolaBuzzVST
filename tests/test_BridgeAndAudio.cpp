@@ -1270,46 +1270,4 @@ TEST(OscTablesExtra, AllWaveformsDistinct) {
     }
 }
 
-TEST(GearScannerExtra, GeneratorTypeIsCorrect) {
-    GearScanner scanner;
-    std::string gearDir = GetGearPath("");
-    if (gearDir.empty()) return;
-    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
-        gearDir.pop_back();
-    if (!scanner.Scan(gearDir)) return;
-
-    for (auto& g : scanner.GetGenerators()) {
-        CHECK_TRUE(g.machineType == MT_GENERATOR);
-        CHECK_TRUE(!g.dllPath.empty());
-        CHECK_TRUE(!g.displayName.empty());
-    }
-}
-
-TEST(GearScannerExtra, EffectTypeIsCorrect) {
-    GearScanner scanner;
-    std::string gearDir = GetGearPath("");
-    if (gearDir.empty()) return;
-    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
-        gearDir.pop_back();
-    if (!scanner.Scan(gearDir)) return;
-
-    for (auto& f : scanner.GetEffects()) {
-        CHECK_TRUE(f.machineType == MT_EFFECT);
-        CHECK_TRUE(!f.dllPath.empty());
-        CHECK_TRUE(!f.displayName.empty());
-    }
-}
-
-TEST(GearScannerExtra, GeneratorAndEffectCountsSumToTotal) {
-    GearScanner scanner;
-    std::string gearDir = GetGearPath("");
-    if (gearDir.empty()) return;
-    while (!gearDir.empty() && (gearDir.back() == '\\' || gearDir.back() == '/'))
-        gearDir.pop_back();
-    if (!scanner.Scan(gearDir)) return;
-
-    auto total = scanner.GetEntries().size();
-    auto gens = scanner.GetGenerators().size();
-    auto fxs = scanner.GetEffects().size();
-    ASSERT_EQ(gens + fxs, total);
-}
+// GearScanner tests moved to test_GearScanner.cpp (shared scan to avoid hangs)

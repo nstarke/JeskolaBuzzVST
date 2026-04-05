@@ -317,10 +317,10 @@ TEST(MidiCallbacks, SetMachineInterfaceExNull) {
 // Integration: MidiNote on real machine
 // ===========================================================================
 
-// GetRefPath is in TestHelpers.h
+// GetGearPath is in TestHelpers.h
 
 TEST(MidiIntegration, MidiNoteOnRealMachine) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -363,7 +363,7 @@ TEST(MidiIntegration, MidiNoteOnRealMachine) {
 }
 
 TEST(MidiIntegration, MidiControlChangeOnExtendedInterface) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {

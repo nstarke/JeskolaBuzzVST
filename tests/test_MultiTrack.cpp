@@ -203,11 +203,11 @@ TEST(MultiTrack, NoTrackintOverlapsGlobal) {
 // Integration: real machine with tracks
 // ===========================================================================
 
-// GetRefPath is in TestHelpers.h
+// GetGearPath is in TestHelpers.h
 
 TEST(MultiTrack, RealMachineTrackInfo) {
 	// Load a generator and check its track limits
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
@@ -229,7 +229,7 @@ TEST(MultiTrack, RealMachineTrackInfo) {
 }
 
 TEST(MultiTrack, RealMachineSetNumTracks) {
-	std::string path = GetRefPath("ref/Gear/Generators/FSM Kick XP.dll");
+	std::string path = GetGearPath("generators\\FSM Kick XP.dll");
 
 	BuzzMachineLoader loader;
 	if (!loader.Load(path.c_str())) {
