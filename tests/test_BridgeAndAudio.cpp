@@ -6,6 +6,9 @@
 #include "../src/vst3/plugids.h"
 #include "../src/buzz/BuzzWaveTable.h"
 #include "../src/buzz/BuzzParamLayout.h"
+#include "../src/buzz/BuzzMachineLoader.h"
+#include "../src/buzz/BuzzMDKHelper.h"
+#include "../src/buzz/BuzzOscTables.h"
 #include "../src/vst3/ParameterMapping.h"
 #include "../src/buzz/MachineInterface.h"
 #include <cstring>
@@ -295,4 +298,302 @@ TEST(ParamLayoutNew, WriteTrackNoValues) {
     // pt_note NoValue = 0, pt_byte NoValue = 255
     ASSERT_EQ(layout.ReadTrackParam(trackBuf, 0, 0), 0);
     ASSERT_EQ(layout.ReadTrackParam(trackBuf, 0, 1), 255);
+}
+
+// ============================================================================
+// 9. ValidateInfo edge cases (BuzzMachineLoader)
+// ============================================================================
+
+TEST(ValidateInfo, NullInfoRejected) {
+    BuzzMachineLoader loader;
+    // ValidateInfo is private, but Load with a bad path exercises it.
+    // We test via observable behavior: Load returns false for invalid DLLs.
+    ASSERT_FALSE(loader.Load(""));
+    ASSERT_FALSE(loader.Load(nullptr));
+}
+
+TEST(ValidateInfo, NegativeParamCounts) {
+    // CMachineInfo with negative param counts should fail validation.
+    // We can't call ValidateInfo directly, but we verify via the public
+    // Build function that handles these gracefully.
+    CMachineParameter pByte = MakeParam(pt_byte, 0, 127, 255, 64);
+    const CMachineParameter* params[] = { &pByte };
+
+    CMachineInfo info = {};
+    info.Type = MT_GENERATOR;
+    info.numGlobalParameters = -1;
+    info.numTrackParameters = 0;
+    info.Parameters = params;
+    info.minTracks = 0;
+    info.maxTracks = 0;
+
+    // Build should handle negative counts gracefully
+    BuzzParamLayout layout;
+    layout.Build(&info);
+    // Negative count treated as 0 — no crash
+    ASSERT_EQ(layout.GetGlobalSlots().size(), 0u);
+}
+
+TEST(ValidateInfo, MaxTracksLessThanMinTracks) {
+    CMachineInfo info = {};
+    info.Type = MT_GENERATOR;
+    info.numGlobalParameters = 0;
+    info.numTrackParameters = 0;
+    info.Parameters = nullptr;
+    info.minTracks = 5;
+    info.maxTracks = 2; // invalid: max < min
+
+    // Build should not crash with bad track counts
+    BuzzParamLayout layout;
+    layout.Build(&info);
+    ASSERT_EQ(layout.GetGlobalSlots().size(), 0u);
+}
+
+// ============================================================================
+// 10. Oscillator table waveform verification
+// ============================================================================
+
+TEST(OscTables, SineIsZeroAtStart) {
+    const short* sine = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_NOT_NULL(sine);
+    // Level 0 starts at offset 0, 2048 samples. Sine should start near 0.
+    ASSERT_LE(abs((int)sine[0]), 100); // near zero at phase 0
+}
+
+TEST(OscTables, SineHasFullAmplitude) {
+    const short* sine = BuzzOscTables::GetTable(OWF_SINE);
+    ASSERT_NOT_NULL(sine);
+    // Find max in level 0 (2048 samples). Should be near 32767.
+    int maxVal = 0;
+    for (int i = 0; i < 2048; i++) {
+        int v = abs((int)sine[i]);
+        if (v > maxVal) maxVal = v;
+    }
+    ASSERT_GT(maxVal, 30000);
+}
+
+TEST(OscTables, SawtoothMaxAmplitude) {
+    const short* saw = BuzzOscTables::GetTable(OWF_SAWTOOTH);
+    ASSERT_NOT_NULL(saw);
+    int maxVal = 0;
+    for (int i = 0; i < 2048; i++) {
+        int v = abs((int)saw[i]);
+        if (v > maxVal) maxVal = v;
+    }
+    ASSERT_GT(maxVal, 20000);
+}
+
+TEST(OscTables, PulseIsSymmetric) {
+    const short* pulse = BuzzOscTables::GetTable(OWF_PULSE);
+    ASSERT_NOT_NULL(pulse);
+    // Pulse wave should have positive and negative regions
+    bool hasPositive = false, hasNegative = false;
+    for (int i = 0; i < 2048; i++) {
+        if (pulse[i] > 1000) hasPositive = true;
+        if (pulse[i] < -1000) hasNegative = true;
+    }
+    ASSERT_TRUE(hasPositive);
+    ASSERT_TRUE(hasNegative);
+}
+
+TEST(OscTables, TriangleMaxAmplitude) {
+    const short* tri = BuzzOscTables::GetTable(OWF_TRIANGLE);
+    ASSERT_NOT_NULL(tri);
+    int maxVal = 0;
+    for (int i = 0; i < 2048; i++) {
+        int v = abs((int)tri[i]);
+        if (v > maxVal) maxVal = v;
+    }
+    ASSERT_GT(maxVal, 20000);
+}
+
+TEST(OscTables, NoiseIsNonZero) {
+    const short* noise = BuzzOscTables::GetTable(OWF_NOISE);
+    ASSERT_NOT_NULL(noise);
+    // Noise should have some non-zero values
+    int nonZero = 0;
+    for (int i = 0; i < 2048; i++) {
+        if (noise[i] != 0) nonZero++;
+    }
+    ASSERT_GT(nonZero, 100);
+}
+
+TEST(OscTables, Sawtooth303Exists) {
+    const short* saw303 = BuzzOscTables::GetTable(OWF_303_SAWTOOTH);
+    ASSERT_NOT_NULL(saw303);
+    int maxVal = 0;
+    for (int i = 0; i < 2048; i++) {
+        int v = abs((int)saw303[i]);
+        if (v > maxVal) maxVal = v;
+    }
+    ASSERT_GT(maxVal, 10000);
+}
+
+TEST(OscTables, HigherLevelsAreShorter) {
+    // GetOscTblOffset gives the start offset for each level.
+    // Level 0 = 0, Level 1 = 2048, Level 2 = 2048+1024, etc.
+    int off0 = GetOscTblOffset(0);
+    int off1 = GetOscTblOffset(1);
+    int off2 = GetOscTblOffset(2);
+    ASSERT_EQ(off0, 0);
+    ASSERT_EQ(off1, 2048);
+    ASSERT_EQ(off2, 2048 + 1024);
+    // Each subsequent level should have a higher offset
+    for (int lvl = 1; lvl <= 10; lvl++) {
+        ASSERT_GT(GetOscTblOffset(lvl), GetOscTblOffset(lvl - 1));
+    }
+}
+
+// ============================================================================
+// 11. MDK stub lifecycle
+// ============================================================================
+
+TEST(MDKStub, CreateAndDestroy) {
+    void* stub = CreateMDKStub();
+    ASSERT_NOT_NULL(stub);
+    ASSERT_FALSE(WasMDKInitCalled(stub));
+    DestroyMDKStub(stub);
+}
+
+TEST(MDKStub, InitCalledFlag) {
+    void* stub = CreateMDKStub();
+    ASSERT_NOT_NULL(stub);
+    ASSERT_FALSE(WasMDKInitCalled(stub));
+
+    // Simulate vtable[10] call by setting the flag directly
+    // (We can't call through vtable in unit test without a real machine)
+    // Instead, test the Reset function
+    ResetMDKInitFlag(stub);
+    ASSERT_FALSE(WasMDKInitCalled(stub));
+
+    DestroyMDKStub(stub);
+}
+
+TEST(MDKStub, NullSafety) {
+    ASSERT_FALSE(WasMDKInitCalled(nullptr));
+    ResetMDKInitFlag(nullptr); // should not crash
+    DestroyMDKStub(nullptr);   // should not crash
+}
+
+// ============================================================================
+// 12. Trigger switch detection (pt_switch with min=1 max=1)
+// ============================================================================
+
+TEST(TriggerSwitch, DetectTrigParam) {
+    // A pt_switch with min=1, max=1 is a trigger (like ErsBlipp's Trig)
+    CMachineParameter pTrig = MakeParam(pt_switch, 1, 1, 255, 255, 0);
+    ASSERT_EQ(pTrig.Type, (CMPType)pt_switch);
+    ASSERT_EQ(pTrig.MinValue, 1);
+    ASSERT_EQ(pTrig.MaxValue, 1);
+}
+
+TEST(TriggerSwitch, NotATrigger) {
+    // A normal pt_switch (min=0, max=1) is NOT a trigger
+    CMachineParameter pSwitch = MakeParam(pt_switch, 0, 1, 255, 0, MPF_STATE);
+    ASSERT_FALSE(pSwitch.MinValue == 1 && pSwitch.MaxValue == 1);
+}
+
+TEST(TriggerSwitch, TriggerLayout) {
+    // Machine with only track params including a trigger
+    CMachineParameter pFreq = MakeParam(pt_word, 0, 32768, 65535, 5825);
+    CMachineParameter pGain = MakeParam(pt_byte, 0, 127, 255, 113);
+    CMachineParameter pTrig = MakeParam(pt_switch, 1, 1, 255, 255, 0);
+
+    const CMachineParameter* params[] = { &pFreq, &pGain, &pTrig };
+    CMachineInfo info = {};
+    info.Type = MT_GENERATOR;
+    info.numGlobalParameters = 0;
+    info.numTrackParameters = 3;
+    info.Parameters = params;
+    info.minTracks = 1;
+    info.maxTracks = 1;
+
+    BuzzParamLayout layout;
+    layout.Build(&info);
+
+    auto& tSlots = layout.GetTrackSlots();
+    ASSERT_EQ(tSlots.size(), 3u);
+
+    // Find trigger slot
+    int trigSlot = -1;
+    for (int i = 0; i < (int)tSlots.size(); i++) {
+        if (tSlots[i].param->Type == pt_switch &&
+            tSlots[i].param->MinValue == 1 && tSlots[i].param->MaxValue == 1) {
+            trigSlot = i;
+            break;
+        }
+    }
+    ASSERT_EQ(trigSlot, 2);
+
+    // Verify we can write trigger value
+    // Track struct: word(2) + byte(1) + switch(1) = 4 bytes
+    ASSERT_EQ(layout.GetTrackStructSize(), 4);
+    char buf[8] = {};
+    layout.WriteTrackAllNoValues(buf, 1);
+    layout.WriteTrackParam(buf, 0, trigSlot, 1);
+    ASSERT_EQ(layout.ReadTrackParam(buf, 0, trigSlot), 1);
+}
+
+// ============================================================================
+// 13. BuzzParamLayout Build with edge cases
+// ============================================================================
+
+TEST(ParamLayoutEdge, NullInfoPointer) {
+    BuzzParamLayout layout;
+    layout.Build(nullptr);
+    ASSERT_EQ(layout.GetGlobalSlots().size(), 0u);
+    ASSERT_EQ(layout.GetTrackSlots().size(), 0u);
+}
+
+TEST(ParamLayoutEdge, ZeroParamsNullParameters) {
+    CMachineInfo info = {};
+    info.Type = MT_GENERATOR;
+    info.numGlobalParameters = 0;
+    info.numTrackParameters = 0;
+    info.Parameters = nullptr;
+
+    BuzzParamLayout layout;
+    layout.Build(&info);
+    ASSERT_EQ(layout.GetGlobalSlots().size(), 0u);
+    ASSERT_EQ(layout.GetTrackSlots().size(), 0u);
+    ASSERT_EQ(layout.GetGlobalStructSize(), 0);
+    ASSERT_EQ(layout.GetTrackStructSize(), 0);
+}
+
+TEST(ParamLayoutEdge, SingleNoteParam) {
+    CMachineParameter pNote = MakeParam(pt_note, 1, 156, 0, 0);
+    const CMachineParameter* params[] = { &pNote };
+    CMachineInfo info = {};
+    info.Type = MT_GENERATOR;
+    info.numGlobalParameters = 0;
+    info.numTrackParameters = 1;
+    info.Parameters = params;
+
+    BuzzParamLayout layout;
+    layout.Build(&info);
+
+    auto& tSlots = layout.GetTrackSlots();
+    ASSERT_EQ(tSlots.size(), 1u);
+    ASSERT_EQ(tSlots[0].param->Type, (CMPType)pt_note);
+    // pt_note = 1 byte
+    ASSERT_EQ(layout.GetTrackStructSize(), 1);
+}
+
+// ============================================================================
+// 14. Wave table auto-slot and GetLoadedPaths
+// ============================================================================
+
+TEST(WaveTableAuto, GetLoadedPathsEmpty) {
+    BuzzWaveTable wt;
+    auto paths = wt.GetLoadedPaths();
+    ASSERT_EQ(paths.size(), 0u);
+}
+
+TEST(WaveTableAuto, ClearAllSlots) {
+    BuzzWaveTable wt;
+    wt.ClearAll();
+    for (int i = 1; i <= 200; i++) {
+        ASSERT_FALSE(wt.IsLoaded(i));
+    }
+    ASSERT_EQ(wt.GetFreeWave(), 1);
 }

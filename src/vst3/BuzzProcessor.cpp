@@ -622,6 +622,13 @@ void BuzzProcessor::processMidiEvents(IEventList* events)
 							noteStillPending = true;
 					}
 				}
+				else if (bridgeTrackTrigSlot >= 0 && !currentTrackValues.empty()) {
+					auto& tp = trackParamChanged[0];
+					if (bridgeTrackTrigSlot < (int)tp.size() && tp[bridgeTrackTrigSlot]) {
+						if (currentTrackValues[0][bridgeTrackTrigSlot] == 1)
+							noteStillPending = true;
+					}
+				}
 #else
 				{
 					auto* layout = loader.GetParamLayout();
