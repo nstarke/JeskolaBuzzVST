@@ -1,0 +1,667 @@
+Found 518 machines total
+Testing 124 generators, 372 effects (skipped 22 VST/Peer)
+
+=== GENERATORS ===
+  3Dizer Listener Control                  NO AUDIO
+  Geonik's Expression 2                    NO AUDIO
+  Zwar's Repeater                          NO AUDIO
+  11-MidiCCout v1.0                        NO AUDIO
+  2ndP IGroove                             NO AUDIO
+  2ndP MGroove                             NO AUDIO
+  7900s Elgam Crazy Band 48                NO AUDIO
+  7900s Pearl Drum                         ERROR (code=-1073740940)
+  7900s XY Controller                      NO AUDIO
+  Automaton Wave Input                     ERROR (code=-1073740791)
+  Automaton Wave Input (Mono)              NO AUDIO
+  BTDSys Pulsar                            ERROR (code=-1073740791)
+  BTDSys Stutter                           NO AUDIO
+  Click'n'Pop generator                    NO AUDIO
+  Climox 303 v2.10.1                       OK (max=1.0)
+  Climox Breaker v1.0                      NO AUDIO
+  CyanPhase DTMF-1                         NO AUDIO
+  Elenzil Frequency Bomb                   TIMEOUT (10s)
+  ErsBlipp                                 NO AUDIO
+  ErsClaves                                NO AUDIO
+  ErsCowbell                               NO AUDIO
+  ErsCymbal                                NO AUDIO
+  ErsHihat                                 NO AUDIO
+  ErsKick                                  OK (max=10138.7)
+  ErsSnare                                 NO AUDIO
+  FSM ArpMan                               OK (max=57.7)
+  FSM Infector                             OK (max=280.2)
+  FSM Kick                                 NO AUDIO
+  FSM Kick XP                              OK (max=55461.8)
+  FUK FIRe Synth                           OK (max=2259.4)
+  Frequency UnKnown Freq In                NO AUDIO
+  Frequency UnKnown Mr Brown               NO AUDIO
+  Fuzzpilz Kitchen Sink 2                  OK (max=32768.0)
+  Fuzzpilz Orange Kid                      OK (max=10784.4)
+  Fuzzpilz Trigger Trigger                 NO AUDIO
+  Fuzzpilz UnwieldyTracker                 NO AUDIO
+  Geonik's DirectX Sound Input             NO AUDIO
+  Geonik's Omega-1                         NO AUDIO
+  Geonik's Plucked String                  OK (max=64918.1)
+  Geonik's PrimiFun                        OK (max=26160.5)
+  HACK P. DooM's Jump                      NO AUDIO
+  HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
+  HD GARAGE  (hd.gut.ru - hdd@nm.ru)       NO AUDIO
+  HD Guitar at hd.ozz.ru - beta            OK (max=28358.5)
+  HD Master Kick (No liner!)               OK (max=127454.4)
+  HD OzO (beta version)                    OK (max=42147.4)
+  HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   NO AUDIO
+  HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    NO AUDIO
+  HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
+  HNO3 Divine Intervention                 NO AUDIO
+  Harcs WARP                               NO AUDIO
+  IX Split 1.07                            NO AUDIO
+  IX Split 1.08                            NO AUDIO
+  Intoxicat Asynchronous Cloud             ERROR (code=-1073740791)
+  Intoxicat Asynchronous Cloud             ERROR (code=-1073740791)
+  Jeskola Bass                             OK (max=12492.0)
+  Jeskola ES-9                             OK (max=66954.7)
+  Jeskola PM Bass                          OK (max=7689.0)
+  Jeskola PM Bass                          OK (max=4130.1)
+  Jeskola Pianoroll                        NO AUDIO
+  Jeskola Trilok                           NO AUDIO
+  Jeskola WaveIn interface                 NO AUDIO
+  Lipid Impulse Tracker Module Loader      NO AUDIO
+  MadBrain's 4fm2f                         OK (max=12600.7)
+  MadBrain's D500                          OK (max=253.8)
+  MadBrain's Dynamite 6 1.2                OK (max=1.5)
+  MadBrain's Table Warp                    OK (max=64012.0)
+  Matilde Tracker                          NO AUDIO
+  Matilde Tracker2                         NO AUDIO
+  Mp3 Loader Version 0.1                   NO AUDIO
+  Muon Synth                               OK (max=18268.3)
+  Oomek Aggressor 3o3                      NO AUDIO
+  Q Piano                                  OK (max=109903.4)
+  Rebirth MIDI Controller                  NO AUDIO
+  RectalAnarchy                            NO AUDIO
+  Rout SoundFont Loader                    NO AUDIO
+  Ruff Speccy II                           ERROR (code=-1073740791)
+  Rymix KyrieSpectra                       ERROR (code=-1073740791)
+  Saxpy's HT-700                           OK (max=3039.0)
+  Sgorpi Clap                              NO AUDIO
+  Sgorpi's Mean Bassdrum Machine           NO AUDIO
+  SuperDonut Ultimate Drum                 NO AUDIO
+  Synthrom Sinus v2.0                      NO AUDIO
+  TEH NOISEMAKING                          OK (max=49197.0)
+  WhiteNoise Scratcher                     NO AUDIO
+  Zephod & Thevider WaveEdit               NO AUDIO
+  Zephod Blok2009                          OK (max=2156.2)
+  Zephod DDM-110 Super Drums               NO AUDIO
+  Zephod DDM-110 Super Drums               NO AUDIO
+  Zephod Firecracker                       OK (max=327265792.0)
+  Zephod HT-700 drums                      OK (max=75050.2)
+  Zephod Magnus                            OK (max=38.9)
+  Zephod Midi                              NO AUDIO
+  Zephod Synth-R-Class                     OK (max=4483.5)
+  Zephod VoidBass II                       OK (max=530.9)
+  Zephod VoidLead                          OK (max=31313.9)
+  Zephod VoidSynth II                      OK (max=7977.5)
+  cmx HD Player v1.00                      NO AUDIO
+  cmx Wacko T1 v0.90beta                   OK (max=31507.4)
+  cmx Wacko v0.01beta                      NO AUDIO
+  farbrausch V2                            OK (max=an!
+sound size: 89
+size of version 0 sound bank: 68 params, 12 globals
+size of version 1 sound bank: 78 params, 21 globals
+size of version 2 sound bank: 82 params, 21 globals
+size of version 3 sound bank: 83 params, 21 globals
+size of version 4 soun)
+  farbrausch V2                            OK (max=an!
+sound size: 89
+size of version 0 sound bank: 68 params, 12 globals
+size of version 1 sound bank: 78 params, 21 globals
+size of version 2 sound bank: 82 params, 21 globals
+size of version 3 sound bank: 83 params, 21 globals
+size of version 4 soun)
+  hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
+  hd.ozz.ru Gen_Station_Ultra_6_Lite       OK (max=65869.7)
+  http://hd.nm.ru - Just_Guitar - 2nd edition OK (max=44141.5)
+  intoxicat eight-n - step sequencer       NO AUDIO
+  kazuya Graph-64                          NO AUDIO
+  kazuya JoyControl-4                      ERROR (code=-1073740940)
+  kejo's Perlin Noise Generator v0.9       NO AUDIO
+  ld PadSynth                              OK (max=22331.2)
+  ld auricula                              OK (max=13701.4)
+  ld clap                                  NO AUDIO
+  ld cymbal                                NO AUDIO
+  ld grain                                 NO AUDIO
+  ld jacinth2                              ERROR (code=-1073740791)
+  ld snare                                 NO AUDIO
+  paniq WavEd                              NO AUDIO
+  paniq's plutonium                        NO AUDIO
+  pooplog 8 stage width modulation synth dual envelope OK (max=12387.5)
+  pooplog fast pulse width modulation envelope OK (max=12098.9)
+  rewire2lnk                               NO AUDIO
+  ruff AMNIBUS                             NO AUDIO
+  ruff KOLOBOK                             NO AUDIO
+  vII MidiOut                              NO AUDIO
+
+=== EFFECTS ===
+  10 Band Graphic EQ                       NO AUDIO
+  11-A2M v1.0                              OK (max=16383.9)
+  11-CSI v1.0                              OK (max=16334.2)
+  11-Delay v1.1                            OK (max=16383.9)
+  11-Distortion v1.0                       OK (max=16319.9)
+  11-RhythmGate v1.1                       OK (max=16383.9)
+  11-SignSplit v1.0                        OK (max=16383.9)
+  11-Zerhacker v0.9                        NO AUDIO
+  2ndP SMix                                OK (max=0.0)
+  2ndProcess Dirtyfier                     OK (max=6000.0)
+  7900s 'Osc' Amplitude Modulator          OK (max=inf)
+  AutoFade v1.0                            OK (max=16383.9)
+  Automaton 2-pole                         NO AUDIO
+  Automaton Balance                        OK (max=16383.9)
+  Automaton Compressor                     OK (max=16383.9)
+  Automaton Compressor mkII                OK (max=inf)
+  Automaton DC Eliminator                  ERROR (code=-1073740940)
+  Automaton EQ-7                           OK (max=16383.9)
+  Automaton Expander                       OK (max=16383.9)
+  Automaton Mono                           OK (max=16383.9)
+  Automaton Parametric EQ                  NO AUDIO
+  BG Compressor                            OK (max=79010729952051728848697996345344.0)
+  BG Compressor & Gate                     OK (max=67617027709791041843155104589414400.0)
+  BG MaxiLimiter                           OK (max=16383.9)
+  BG Noise Gate                            OK (max=67617027709791041843155104589414400.0)
+  BG Sidechain Dynamics                    OK (max=67617027709791041843155104589414400.0)
+  Bigyo 2p Filter                          OK (max=16384.7)
+  Bigyo Delay                              OK (max=34084.1)
+  Bigyo FrequencyShifter                   OK (max=16383.9)
+  Bigyo Pan                                OK (max=inf)
+  Bigyo ParamEQ                            OK (max=16383.8)
+  Bigyo Shaper                             OK (max=15418.5)
+  Bigyo SoftClip                           OK (max=15263.6)
+  Chimp's FXor v1.0                        OK (max=16383.9)
+  Chimp's PowerConvertor v1.0              OK (max=16383.9)
+  Chun-Yu's Smooth Overdrive               OK (max=23873.0)
+  Chun-Yu's TouchWah                       NO AUDIO
+  CnG Recorder                             NO AUDIO
+  CnW Turbion Geiger                       OK (max=140.1)
+  CnW Turbion Metal                        OK (max=2398.6)
+  CnW Turbion Voluma                       OK (max=47.6)
+  CyanPhase AtomStereoMeld                 OK (max=24575.8)
+  CyanPhase AutoDC Blocker                 OK (max=1026.9)
+  CyanPhase DMO Adapter                    OK (max=16383.9)
+  CyanPhase DX Effect Adapter              OK (max=16383.9)
+  CyanPhase JedShivaMeter                  NO AUDIO
+  CyanPhase KrashBox                       OK (max=15462637343335649588019200.0)
+  CyanPhase M-Derive                       OK (max=1026.9)
+  CyanPhase M-Derive 2                     OK (max=1026.9)
+  CyanPhase M-Integral 2                   NO AUDIO
+  CyanPhase Mono                           OK (max=0.0)
+  CyanPhase Notch                          OK (max=16634.4)
+  CyanPhase Recorder                       NO AUDIO
+  CyanPhase SongInfo                       NO AUDIO
+  CyanPhase UnNative Effects               NO AUDIO
+  CyanPhase ViDist 01                      OK (max=18227.7)
+  CyanPhase WaveShaper                     OK (max=7813.2)
+  CyanPhase mC-1                           NO AUDIO
+  CyanPhase mC-Delay                       OK (max=16383.9)
+  Dave's SmootherDrive                     OK (max=16383.9)
+  Dave's SmootherDrive                     OK (max=16383.9)
+  DedaCode Degradation                     OK (max=16383.0)
+  DedaCode Degradation                     OK (max=16383.0)
+  DedaCode Fade                            OK (max=16383.9)
+  DedaCode Fade                            OK (max=16383.9)
+  DedaCode Hoffman_Scratch                 OK (max=16383.9)
+  DedaCode LaD|Box v1.2                    OK (max=16383.9)
+  DedaCode Moving_Average                  OK (max=2207171815390285135872.0)
+  DedaCode PizzaBuffer v2.0                OK (max=3506.7)
+  DedaCode SFilterFIR                      OK (max=16383.9)
+  DedaCode SFilterIIR                      OK (max=16383.9)
+  DedaCode Slicer                          OK (max=16384.0)
+  DedaCode StereoGain                      OK (max=16383.9)
+  DedaCode StereoGain                      OK (max=16383.9)
+  Devon's Analog Cruncher                  OK (max=25685.5)
+  Devon's Leslie                           OK (max=22749.1)
+  Dex Distortion 1.1                       OK (max=65536.0)
+  Dex Filtah 2 - V 1.3                     OK (max=16384.0)
+  Dex MultiComp                            OK (max=9253.4)
+  Dex Volumina                             OK (max=16383.9)
+  Dimage's Detonator                       OK (max=32651.1)
+  Dimage's Exponent Distortion             NO AUDIO
+  Dimage's Hy Distortion                   OK (max=16383.9)
+  Dimage's Sinus Distortion                OK (max=46340.7)
+  DocBexter BuzzRizer V2.0                 OK (max=16383.9)
+  DocBexter'S PhaZaR                       OK (max=16383.9)
+  DocBexter's Neural Net FX 1              OK (max=13074.3)
+  Edsca Migraine                           OK (max=8212.5)
+  Elak Dist 2                              OK (max=16383.9)
+  Elenzil Amplitude Modulator              OK (max=16383.9)
+  FSM Chorus                               OK (max=31143.9)
+  FSM PanzerDelay                          OK (max=16383.9)
+  FSM PhatMan                              OK (max=32734.3)
+  FSM Philta                               OK (max=9356.1)
+  FSM Philthy                              OK (max=2361.3)
+  FSM ScatMan                              OK (max=16383.9)
+  FSM ScrapMan                             OK (max=16383.9)
+  FSM SprayMan                             OK (max=16383.9)
+  FSM TunaMan                              OK (max=16383.9)
+  FSM TunaMan                              OK (max=17493.8)
+  FSM WahMan                               OK (max=320000.0)
+  FSM WahMan Pro 2                         NO AUDIO
+  FSM WahMan Pro 2                         OK (max=12656.3)
+  FUK O-Delay                              OK (max=16383.9)
+  FUK Power Boost                          OK (max=16383.4)
+  FUK Stereo Vibe                          OK (max=16379.7)
+  Filtro Promediador                       OK (max=16119.7)
+  Filtro de Mediana                        OK (max=16232.6)
+  FireSledge Pampurfe                      OK (max=11594.5)
+  FireSledge ParamEQ                       OK (max=16383.9)
+  Frequency UnKnown 20dB Boost             OK (max=163839.0)
+  Frequency UnKnown Absolut                OK (max=32766.8)
+  Frequency UnKnown Asymmetric             OK (max=16383.9)
+  Frequency UnKnown Bender                 OK (max=16384.0)
+  Frequency UnKnown Class B                OK (max=3383.5)
+  Frequency UnKnown Freq Out               OK (max=16383.9)
+  Frequency UnKnown THCMA                  OK (max=0.0)
+  Fuzzpilz Chorpse                         OK (max=8383.7)
+  Fuzzpilz Chorpse Senior                  OK (max=3219.4)
+  Fuzzpilz Clipper                         OK (max=16383.9)
+  Fuzzpilz Drink                           OK (max=16383.9)
+  Fuzzpilz Eff Emm                         OK (max=32767.9)
+  Fuzzpilz Food                            OK (max=0.0)
+  Fuzzpilz Knusprig                        OK (max=16383.9)
+  Fuzzpilz LRMS                            OK (max=23170.3)
+  Fuzzpilz Lepidopterist                   OK (max=16383.9)
+  Fuzzpilz Multibandit                     OK (max=16383.9)
+  Fuzzpilz Oppressor 3                     NO AUDIO
+  Fuzzpilz Pottwal                         OK (max=50.6)
+  Fuzzpilz Rosengarten                     ERROR (code=-1073740940)
+  Fuzzpilz UnwieldyDelay II                OK (max=16383.9)
+  Fuzzpilz UnwieldyDist                    OK (max=16383.9)
+  Fuzzpilz UnwieldyPitch                   OK (max=16383.9)
+  GenRe - General Retrigger Machine        NO AUDIO
+  Geonik's 2p Filter                       OK (max=17510.8)
+  Geonik's Amplitude Modulation            OK (max=12287.9)
+  Geonik's AutoPan                         OK (max=11585.2)
+  Geonik's Compressor                      OK (max=17716.3)
+  Geonik's DF Filter                       OK (max=18361.4)
+  Geonik's Dolby Surround                  OK (max=11650.0)
+  Geonik's Expression                      OK (max=7192.4)
+  Geonik's Gapper                          OK (max=16383.9)
+  Geonik's Gate                            OK (max=14464.8)
+  Geonik's Overdrive                       OK (max=33204.9)
+  Geonik's Overdrive 2                     OK (max=20684.3)
+  Geonik's Resonator                       OK (max=16383.9)
+  Geonik's Saturator                       OK (max=13950.5)
+  Geonik's Visualization                   OK (max=16383.9)
+  HD 2p-SpecFilter  (#phatbuzz@Efnet / hdd@nm.ru)   OK (max=16383.9)
+  HD COmbO Delay  (hd.gut.ru - hdd@nm.ru)   OK (max=16383.9)
+  HD ChorD  (hd.gut.ru - hdd@nm.ru)        OK (max=16383.9)
+  HD Easy_Filter                           OK (max=16383.9)
+  HD F-Flanger   hd.gut.ru                 OK (max=31926.0)
+  HD HALYverb  (hd.gut.ru - hdd@nm.ru)     OK (max=16512.1)
+  HD J-Flanger   ha.ozz.ru                 OK (max=33048.6)
+  HD Limiter Quad 4.1 (hd.gut.ru - hdd@nm.ru)  OK (max=21438.8)
+  HD Limiter Quad 4.1.2 (hd.gut.ru - hdd@nm.ru)  OK (max=100674.9)
+  HD Mod-X  [ www.haldreamer.com / IRC: #phatbuzz @ EFnet ]   OK (max=0.0)
+  HD Modulation  (www.HalDreamer.com / hdd@nm.ru)   OK (max=26214.8)
+  HD Saturation  (hd.gut.ru - hdd@nm.ru)   OK (max=16349.8)
+  Harcs Signal Analyser                    OK (max=16383.9)
+  Harcs Vision                             ERROR (code=-1073740940)
+  Hoester Groove Box                       OK (max=16383.9)
+  IX Strip 1.0b                            NO AUDIO
+  Intoxicat Dub Delay                      NO AUDIO
+  J.R. BP V1 Filter                        OK (max=1026.3)
+  J.R. BP V2 Filter                        OK (max=1026.3)
+  J.R. HP Filter                           OK (max=107389.6)
+  J.R. LP Filter                           OK (max=303162.6)
+  J.R. Notch Filter                        OK (max=16387.1)
+  JRm Ringo                                OK (max=32766.0)
+  Jeskola 3210                             OK (max=32768.0)
+  Jeskola Chorus                           OK (max=16383.9)
+  Jeskola Delay                            TIMEOUT (10s)
+  Jeskola Distortion                       OK (max=65536.0)
+  Jeskola EQ-3                             OK (max=16383.9)
+  Jeskola Filter                           OK (max=16383.9)
+  Jeskola Filter 2                         OK (max=16383.9)
+  Jeskola Flanger                          OK (max=15038.0)
+  Jeskola Karhu                            OK (max=8191.9)
+  Jeskola Limiter                          ERROR (code=-1073740791)
+  Jeskola Raverb                           NO AUDIO
+  Jeskola Spatializer                      OK (max=9561.6)
+  Jeskola Tube Amp                         OK (max=95146.8)
+  Jeskola Wave Shaper                      OK (max=32767.0)
+  JoaSmurf VUMeter                         OK (max=16383.9)
+  Joachims ChannelStrip v0.4               OK (max=16383.9)
+  Joachims Chopper v1.1                    OK (max=16344.3)
+  Joachims Compressor v3 (Zephod remix)    OK (max=3713.8)
+  Joachims Compressor v4                   OK (max=8307.0)
+  Joachims DeNoiser                        OK (max=16316.5)
+  Joachims DeepPan                         OK (max=11592.1)
+  Joachims Hyperion v1.0                   OK (max=16383.9)
+  Joachims Jupiter v2                      NO AUDIO
+  Joachims Limiter v3                      OK (max=1919.8)
+  Joachims Linkwitz-Riley v1.0             OK (max=15873.2)
+  Joachims Mars filter v2.2                OK (max=18467.1)
+  Joachims Mercury filter                  OK (max=13429.3)
+  Joachims Multi v2                        OK (max=16297.4)
+  Joachims Neptune v1                      NO AUDIO
+  Joachims Overdrive                       OK (max=20661.5)
+  Joachims Pluto v1.3n                     OK (max=16131.6)
+  Joachims PowerPan                        OK (max=23173.2)
+  Joachims Saturn v1.1                     OK (max=16383.9)
+  Joachims Temperature                     OK (max=16383.9)
+  Joachims Tethys v1.3                     OK (max=13595.3)
+  Joachims Uranus v0.6 beta                OK (max=9184.5)
+  Joystick Filter 1                        NO AUDIO
+  KBP's Reversor                           OK (max=16383.9)
+  Komi::Chaoticon !                        OK (max=16367.9)
+  KrimZon NocturnalTransmitter v1.1.0      NO AUDIO
+  LD Declicker v1.0.3                      OK (max=17493.8)
+  LarsHa Funkyverb                         OK (max=16383.9)
+  LarsHaKa rIDMa                           OK (max=16378.9)
+  LazyPanner                               OK (max=16383.9)
+  LdC Automax                              OK (max=32767.0)
+  LdC Destroyer                            OK (max=16383.9)
+  LdC Trigger                              NO AUDIO
+  Lost_Bit iPan                            OK (max=16383.9)
+  Lost_Bit improved MoDulator              OK (max=0.0)
+  Lysergia Gapper                          OK (max=16376.3)
+  MT Side Chain                            NO AUDIO
+  MadBrain's LeeterDrive                   OK (max=16383.9)
+  MadBrain's NeaterDrive                   OK (max=16383.9)
+  MadBrain's Unsign                        OK (max=32768.0)
+  Mixer                                    OK (max=16383.9)
+  Morex 32-Bit Stereo Wave Out             OK (max=16383.9)
+  Muon Delay                               OK (max=8224.1)
+  Nafai's fSwitch                          OK (max=0.0)
+  Negative                                 OK (max=16513.9)
+  Ninereeds Fractal v1.0                   OK (max=6193.3)
+  Ninereeds Pulsify v1.0                   OK (max=2315.4)
+  Numbird                                  OK (max=13558.2)
+  Offset Eq                                OK (max=16383.9)
+  Oomek Exciter                            OK (max=15407.8)
+  Oomek Masterizer                         OK (max=14633.2)
+  PSI Corp's LFO Filter                    OK (max=16339.6)
+  PSI KRAFT! (2.0)                         OK (max=16383.9)
+  Q Brainwaves                             OK (max=15734.9)
+  Q Watah                                  OK (max=16383.9)
+  Q Zfilter                                OK (max=16392.6)
+  Q-Rebond                                 OK (max=16383.9)
+  QuadSlice                                OK (max=16556.8)
+  Revolver3                                OK (max=16383.9)
+  Revolver5                                OK (max=16383.9)
+  Revolver7                                OK (max=16383.9)
+  Revolver9                                OK (max=16383.9)
+  RnR Distortion                           OK (max=18356.0)
+  Rout Splitter                            OK (max=4493.6)
+  Rout Vibrato                             OK (max=16441.1)
+  Rymix FlaserBox                          OK (max=13201.7)
+  Rymix StereoBox                          OK (max=62885261312.0)
+  Rymix StereoBox Pro                      OK (max=17609.6)
+  SVF Filter                               OK (max=17749.9)
+  Savages SGap                             OK (max=30897.5)
+  Scoofster SV Filter                      NO AUDIO
+  Sgorpi MultiTrack Writer                 OK (max=16383.9)
+  Sonic Verb                               OK (max=16383.9)
+  Static Duafilt                           OK (max=304.2)
+  Static Duafilt II                        ERROR (code=-1073740940)
+  Static Peak EQ                           OK (max=16357.3)
+  Static Phaser                            OK (max=6486.7)
+  Static Sensonic                          OK (max=16733.4)
+  THC 8 Tap Stereo Delay                   OK (max=8127.9)
+  THC Dolby Proliogic with Echo            NO AUDIO
+  Tic-Tac aBuffer                          OK (max=16383.9)
+  Vinje Delay 1.0                          OK (max=8191.4)
+  Vinje I 1.1                              OK (max=8191.4)
+  Vinje II 1.0                             OK (max=8191.4)
+  WhiteNoise Chorus                        OK (max=9138.5)
+  WhiteNoise Fuzzbox                       OK (max=16383.9)
+  WhiteNoise Gate                          OK (max=16381.4)
+  WhiteNoise Pixelate                      OK (max=16383.9)
+  WhiteNoise Recorder                      OK (max=16383.9)
+  WhiteNoise Ringmod                       OK (max=16313.7)
+  WhiteNoise Stereo Mod                    OK (max=3891.9)
+  WhiteNoise Stereo-dist                   OK (max=5193.3)
+  WhiteNoise Stutter                       TIMEOUT (10s)
+  WhiteNoise Verb                          OK (max=2993.9)
+  WhiteNoise's Filtron                     OK (max=16383.6)
+  WhiteNoise's Harmonic Delay              TIMEOUT (10s)
+  WhiteNoise's HiFiltron                   OK (max=8.0)
+  Ynzn's 3D Fx Simulator                   OK (max=16419.5)
+  ZWAR's Swapper                           OK (max=16383.9)
+  ZWAR's Swapper                           OK (max=16383.9)
+  Zephod ADSR                              NO AUDIO
+  Zephod ADSRfilter                        OK (max=1235.8)
+  Zephod Autopan                           OK (max=5483.0)
+  Zephod Blue Filter                       OK (max=5737.5)
+  Zephod EKKY                              OK (max=32767.9)
+  Zephod Enveloper                         NO AUDIO
+  Zephod Freefilter                        NO AUDIO
+  Zephod GAIN                              NO AUDIO
+  Zephod Green Filter                      OK (max=5737.5)
+  Zephod ITCH!                             OK (max=16383.4)
+  Zephod MoogFiltah                        NO AUDIO
+  Zephod Orange Filter                     OK (max=5737.5)
+  Zephod PAN                               OK (max=11585.2)
+  Zephod PolyWog 22                        ERROR (code=-1073740940)
+  Zephod ReSaw                             ERROR (code=-1073740940)
+  Zephod SPREAD                            OK (max=16383.9)
+  Zephod Scope                             OK (max=16383.9)
+  Zephod WUZZ                              OK (max=32767.7)
+  Zephod Waveshaper                        OK (max=16383.9)
+  Zephod Yellow Filter                     OK (max=5737.5)
+  Zephods Paniq!                           OK (max=32768.0)
+  Zephods gurufilter                       OK (max=16383.9)
+  Zu Parametric EQ                         OK (max=4001.7)
+  Zu Slicer                                NO AUDIO
+  Zu Tube Head                             OK (max=23084.7)
+  Zu ªTaps                                 LOAD FAIL
+  aNEurYSm DistGarb                        OK (max=20607.3)
+  asedev Gain01                            OK (max=16383.9)
+  asedev Gain02                            OK (max=16383.9)
+  asedev Gain03                            OK (max=16383.9)
+  asedev HumanM01                          OK (max=16383.9)
+  asedev HumanS01                          OK (max=8191.9)
+  asedev Psycho01                          OK (max=8191.9)
+  asedev a2pFilter01                       OK (max=16467.9)
+  asedev a2pFilter03                       OK (max=16947.1)
+  asedev a2pFilter04                       OK (max=16384.0)
+  asedev a4pFilter01                       OK (max=16384.0)
+  asedev a4pFilter03                       OK (max=16388.9)
+  asedev a4pFilter04                       OK (max=16384.8)
+  asedev aEcho01                           OK (max=16383.9)
+  asedev aReverb01                         OK (max=16383.9)
+  asedev sSpread01                         OK (max=16383.9)
+  cheapo amp                               NO AUDIO
+  cheapo do-nothing                        OK (max=16383.9)
+  chrisisasavage Skweeler                  OK (max=17406.0)
+  edexters logriser                        OK (max=158990.2)
+  glow sidfilter                           NO AUDIO
+  kazuya Mandala                           OK (max=30237.5)
+  kazuya SineMod                           OK (max=24500.6)
+  kazuya SineRing                          OK (max=12633.6)
+  kazuya StereoAutoGain                    OK (max=32768.0)
+  kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
+  kibibu Channel Swap                      OK (max=16383.9)
+  kibibu Convolver7                        OK (max=16383.9)
+  kibibu Inversor                          OK (max=16383.9)
+  kibibu Left                              OK (max=16383.9)
+  kibibu MidSide to Stereo                 OK (max=16383.9)
+  kibibu MultiMerge                        NO AUDIO
+  kibibu Revolving Pan                     OK (max=16383.9)
+  kibibu Revolving Pan with LFO            OK (max=16383.9)
+  kibibu Right                             OK (max=16383.9)
+  kibibu Simple Pan                        OK (max=8191.9)
+  kibibu Stereo Width                      OK (max=8191.9)
+  kibibu Stereo to MidSide                 OK (max=32767.8)
+  ld bandfilter                            OK (max=12511.3)
+  ld latedist                              OK (max=16383.9)
+  ld pfilter                               OK (max=30060.0)
+  ld pipedelay                             OK (max=16383.9)
+  ld stereo sh                             OK (max=16601.4)
+  ld transient2                            OK (max=16383.9)
+  ld zdelay                                OK (max=16383.9)
+  paniq & zephod's ventilator              OK (max=32768.0)
+  synopia 3Dizer Buffer Control            NO AUDIO
+  synopia EAX2.0 Output                    NO AUDIO
+  tonIO                                    NO AUDIO
+  vII Graphity                             NO AUDIO
+  11-FM v1.0                               OK (max=411.6)
+  Analog Distortion                        OK (max=12455.2)
+  BTDSys PulsarFX                          OK (max=1602.4)
+  BTDSys SampleGrid Out                    NO AUDIO
+  Bigyo 2p Filter                          OK (max=16384.6)
+  Fuzzpilz Otter                           NO AUDIO
+  Intoxicat Grain Delay                    NO AUDIO
+  Magicfish IT Sample Loader               NO AUDIO
+  Morex 32-Bit Stereo Wave In              NO AUDIO
+  Zephod FFTsynth                          NO AUDIO
+  ld grain fx                              NO AUDIO
+
+========================================
+Results: 355/496 passed
+  Audio OK:    355
+  No audio:    120
+  Load failed: 1
+  Init failed: 0
+  Crashed:     16
+  Timed out:   4
+========================================
+
+Failed machines:
+  [GEN] 3Dizer Listener Control                  NO AUDIO
+  [GEN] Geonik's Expression 2                    NO AUDIO
+  [GEN] Zwar's Repeater                          NO AUDIO
+  [GEN] 11-MidiCCout v1.0                        NO AUDIO
+  [GEN] 2ndP IGroove                             NO AUDIO
+  [GEN] 2ndP MGroove                             NO AUDIO
+  [GEN] 7900s Elgam Crazy Band 48                NO AUDIO
+  [GEN] 7900s Pearl Drum                         ERROR
+  [GEN] 7900s XY Controller                      NO AUDIO
+  [GEN] Automaton Wave Input                     ERROR
+  [GEN] Automaton Wave Input (Mono)              NO AUDIO
+  [GEN] BTDSys Pulsar                            ERROR
+  [GEN] BTDSys Stutter                           NO AUDIO
+  [GEN] Click'n'Pop generator                    NO AUDIO
+  [GEN] Climox Breaker v1.0                      NO AUDIO
+  [GEN] CyanPhase DTMF-1                         NO AUDIO
+  [GEN] Elenzil Frequency Bomb                   TIMEOUT
+  [GEN] ErsBlipp                                 NO AUDIO
+  [GEN] ErsClaves                                NO AUDIO
+  [GEN] ErsCowbell                               NO AUDIO
+  [GEN] ErsCymbal                                NO AUDIO
+  [GEN] ErsHihat                                 NO AUDIO
+  [GEN] ErsSnare                                 NO AUDIO
+  [GEN] FSM Kick                                 NO AUDIO
+  [GEN] Frequency UnKnown Freq In                NO AUDIO
+  [GEN] Frequency UnKnown Mr Brown               NO AUDIO
+  [GEN] Fuzzpilz Trigger Trigger                 NO AUDIO
+  [GEN] Fuzzpilz UnwieldyTracker                 NO AUDIO
+  [GEN] Geonik's DirectX Sound Input             NO AUDIO
+  [GEN] Geonik's Omega-1                         NO AUDIO
+  [GEN] HACK P. DooM's Jump                      NO AUDIO
+  [GEN] HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
+  [GEN] HD GARAGE  (hd.gut.ru - hdd@nm.ru)       NO AUDIO
+  [GEN] HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   NO AUDIO
+  [GEN] HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    NO AUDIO
+  [GEN] HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
+  [GEN] HNO3 Divine Intervention                 NO AUDIO
+  [GEN] Harcs WARP                               NO AUDIO
+  [GEN] IX Split 1.07                            NO AUDIO
+  [GEN] IX Split 1.08                            NO AUDIO
+  [GEN] Intoxicat Asynchronous Cloud             ERROR
+  [GEN] Intoxicat Asynchronous Cloud             ERROR
+  [GEN] Jeskola Pianoroll                        NO AUDIO
+  [GEN] Jeskola Trilok                           NO AUDIO
+  [GEN] Jeskola WaveIn interface                 NO AUDIO
+  [GEN] Lipid Impulse Tracker Module Loader      NO AUDIO
+  [GEN] Matilde Tracker                          NO AUDIO
+  [GEN] Matilde Tracker2                         NO AUDIO
+  [GEN] Mp3 Loader Version 0.1                   NO AUDIO
+  [GEN] Oomek Aggressor 3o3                      NO AUDIO
+  [GEN] Rebirth MIDI Controller                  NO AUDIO
+  [GEN] RectalAnarchy                            NO AUDIO
+  [GEN] Rout SoundFont Loader                    NO AUDIO
+  [GEN] Ruff Speccy II                           ERROR
+  [GEN] Rymix KyrieSpectra                       ERROR
+  [GEN] Sgorpi Clap                              NO AUDIO
+  [GEN] Sgorpi's Mean Bassdrum Machine           NO AUDIO
+  [GEN] SuperDonut Ultimate Drum                 NO AUDIO
+  [GEN] Synthrom Sinus v2.0                      NO AUDIO
+  [GEN] WhiteNoise Scratcher                     NO AUDIO
+  [GEN] Zephod & Thevider WaveEdit               NO AUDIO
+  [GEN] Zephod DDM-110 Super Drums               NO AUDIO
+  [GEN] Zephod DDM-110 Super Drums               NO AUDIO
+  [GEN] Zephod Midi                              NO AUDIO
+  [GEN] cmx HD Player v1.00                      NO AUDIO
+  [GEN] cmx Wacko v0.01beta                      NO AUDIO
+  [GEN] hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
+  [GEN] intoxicat eight-n - step sequencer       NO AUDIO
+  [GEN] kazuya Graph-64                          NO AUDIO
+  [GEN] kazuya JoyControl-4                      ERROR
+  [GEN] kejo's Perlin Noise Generator v0.9       NO AUDIO
+  [GEN] ld clap                                  NO AUDIO
+  [GEN] ld cymbal                                NO AUDIO
+  [GEN] ld grain                                 NO AUDIO
+  [GEN] ld jacinth2                              ERROR
+  [GEN] ld snare                                 NO AUDIO
+  [GEN] paniq WavEd                              NO AUDIO
+  [GEN] paniq's plutonium                        NO AUDIO
+  [GEN] rewire2lnk                               NO AUDIO
+  [GEN] ruff AMNIBUS                             NO AUDIO
+  [GEN] ruff KOLOBOK                             NO AUDIO
+  [GEN] vII MidiOut                              NO AUDIO
+  [FX] 10 Band Graphic EQ                       NO AUDIO
+  [FX] 11-Zerhacker v0.9                        NO AUDIO
+  [FX] Automaton 2-pole                         NO AUDIO
+  [FX] Automaton DC Eliminator                  ERROR
+  [FX] Automaton Parametric EQ                  NO AUDIO
+  [FX] Chun-Yu's TouchWah                       NO AUDIO
+  [FX] CnG Recorder                             NO AUDIO
+  [FX] CyanPhase JedShivaMeter                  NO AUDIO
+  [FX] CyanPhase M-Integral 2                   NO AUDIO
+  [FX] CyanPhase Recorder                       NO AUDIO
+  [FX] CyanPhase SongInfo                       NO AUDIO
+  [FX] CyanPhase UnNative Effects               NO AUDIO
+  [FX] CyanPhase mC-1                           NO AUDIO
+  [FX] Dimage's Exponent Distortion             NO AUDIO
+  [FX] FSM WahMan Pro 2                         NO AUDIO
+  [FX] Fuzzpilz Oppressor 3                     NO AUDIO
+  [FX] Fuzzpilz Rosengarten                     ERROR
+  [FX] GenRe - General Retrigger Machine        NO AUDIO
+  [FX] Harcs Vision                             ERROR
+  [FX] IX Strip 1.0b                            NO AUDIO
+  [FX] Intoxicat Dub Delay                      NO AUDIO
+  [FX] Jeskola Delay                            TIMEOUT
+  [FX] Jeskola Limiter                          ERROR
+  [FX] Jeskola Raverb                           NO AUDIO
+  [FX] Joachims Jupiter v2                      NO AUDIO
+  [FX] Joachims Neptune v1                      NO AUDIO
+  [FX] Joystick Filter 1                        NO AUDIO
+  [FX] KrimZon NocturnalTransmitter v1.1.0      NO AUDIO
+  [FX] LdC Trigger                              NO AUDIO
+  [FX] MT Side Chain                            NO AUDIO
+  [FX] Scoofster SV Filter                      NO AUDIO
+  [FX] Static Duafilt II                        ERROR
+  [FX] THC Dolby Proliogic with Echo            NO AUDIO
+  [FX] WhiteNoise Stutter                       TIMEOUT
+  [FX] WhiteNoise's Harmonic Delay              TIMEOUT
+  [FX] Zephod ADSR                              NO AUDIO
+  [FX] Zephod Enveloper                         NO AUDIO
+  [FX] Zephod Freefilter                        NO AUDIO
+  [FX] Zephod GAIN                              NO AUDIO
+  [FX] Zephod MoogFiltah                        NO AUDIO
+  [FX] Zephod PolyWog 22                        ERROR
+  [FX] Zephod ReSaw                             ERROR
+  [FX] Zu Slicer                                NO AUDIO
+  [FX] Zu ªTaps                                 LOAD
+  [FX] cheapo amp                               NO AUDIO
+  [FX] glow sidfilter                           NO AUDIO
+  [FX] kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
+  [FX] kibibu MultiMerge                        NO AUDIO
+  [FX] synopia 3Dizer Buffer Control            NO AUDIO
+  [FX] synopia EAX2.0 Output                    NO AUDIO
+  [FX] tonIO                                    NO AUDIO
+  [FX] vII Graphity                             NO AUDIO
+  [FX] BTDSys SampleGrid Out                    NO AUDIO
+  [FX] Fuzzpilz Otter                           NO AUDIO
+  [FX] Intoxicat Grain Delay                    NO AUDIO
+  [FX] Magicfish IT Sample Loader               NO AUDIO
+  [FX] Morex 32-Bit Stereo Wave In              NO AUDIO
+  [FX] Zephod FFTsynth                          NO AUDIO
+  [FX] ld grain fx                              NO AUDIO

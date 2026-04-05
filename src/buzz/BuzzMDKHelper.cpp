@@ -29,14 +29,19 @@ struct MDKStubObject {
 static void __fastcall StubNoOp1(void*, void*, void*) {}
 static void __fastcall StubNoOp2(void*, void*, void*, void*) {}
 
-// MDKInit stub (vtable[10]): sets the initCalled flag so we can detect MDK machines.
-// Called as __thiscall with one arg: MDKInit(CMachineDataInput*)
-static void __fastcall StubMDKInit(void* thisPtr, void* /*edx*/, void* /*dataInput*/) {
+// MDKInit stub (vtable[10]): called by the machine during its MDKInit.
+// The argument is typically a buffer size or mode parameter that the machine
+// expects to read back from the MDK stub later. Store it in field3.
+static void __fastcall StubMDKInit(void* thisPtr, void* /*edx*/, void* dataInput) {
 	auto* stub = (MDKStubObject*)thisPtr;
 	stub->initCalled = 1;
+	// Some machines pass a numeric argument (e.g., buffer size) as the dataInput.
+	// Store it so the machine can read it back if needed.
+	stub->field3 = (int)(intptr_t)dataInput;
 
 	char dbg[128];
-	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDK vtable[10] (MDKInit) called on %p\n", thisPtr);
+	snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDK vtable[10] (MDKInit) called on %p arg=%p\n",
+		thisPtr, dataInput);
 	OutputDebugStringA(dbg);
 }
 
