@@ -227,4 +227,21 @@ if(NOT BUZZVST_64BIT)
         target_compile_definitions(WorkTest PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     endif()
     set_target_properties(WorkTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+    # Extended machine test suite: loads every non-VST/Peer machine and checks audio
+    add_executable(BuzzMachineTests
+        tests/test_AllMachines.cpp
+        ${BUZZ_SOURCES}
+        src/vst3/GearScanner.cpp
+    )
+    target_include_directories(BuzzMachineTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_features(BuzzMachineTests PUBLIC cxx_std_17)
+    if(MSVC)
+        target_compile_options(BuzzMachineTests PRIVATE /EHa)
+        target_compile_definitions(BuzzMachineTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(SMTG_WIN)
+        target_link_libraries(BuzzMachineTests PRIVATE kernel32 user32)
+    endif()
+    set_target_properties(BuzzMachineTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
