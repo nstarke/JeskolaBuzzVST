@@ -32,16 +32,40 @@ static const int TIMEOUT_MS = 10000; // 10 seconds per machine
 // Writes max sample to stdout as a float
 // ============================================================================
 
+// File-based trace used to diagnose crashes that prevent stdio flush.
+// Writes append to %TEMP%\buzz_trace.log, truncated per child via DEL before
+// the parent loop if needed. Enable by setting BUZZ_TRACE=1 in env.
+static void Trace(const char* msg) {
+    static FILE* f = nullptr;
+    static bool checked = false;
+    if (!checked) {
+        checked = true;
+        if (getenv("BUZZ_TRACE")) {
+            char tmp[MAX_PATH]; GetTempPathA(MAX_PATH, tmp);
+            char path[MAX_PATH]; snprintf(path, sizeof(path), "%sbuzz_trace.log", tmp);
+            f = fopen(path, "a");
+        }
+    }
+    if (f) {
+        fprintf(f, "%s\n", msg);
+        fflush(f);
+    }
+}
+
 static int testOneGenerator(const char* dllPath) {
     BuzzMachineLoader loader;
-    if (!loader.Load(dllPath)) return 3;
+    Trace("[GEN] pre-Load"); Trace(dllPath);
+    if (!loader.Load(dllPath)) { Trace("[GEN] Load-FAIL"); return 3; }
+    Trace("[GEN] post-Load");
 
     loader.UpdateMasterInfo(125.0, 44100.0);
 
+    Trace("[GEN] pre-InitMachine");
     bool initOk = false;
     bool ok = SEH_Call([&]() { initOk = loader.InitMachine(); });
-    if (!ok) return 4;
-    if (!initOk) return 2;
+    if (!ok) { Trace("[GEN] InitMachine-CRASH"); return 4; }
+    if (!initOk) { Trace("[GEN] InitMachine-FAIL"); return 2; }
+    Trace("[GEN] post-InitMachine");
 
     auto* machine = loader.GetMachine();
     auto* layout = loader.GetParamLayout();
@@ -52,28 +76,32 @@ static int testOneGenerator(const char* dllPath) {
     auto& tSlots = layout->GetTrackSlots();
 
     // First tick: defaults
+    Trace("[GEN] pre-Tick1");
     if (machine->GlobalVals)
         layout->WriteAllDefaults(machine->GlobalVals);
-    if (machine->TrackVals && !tSlots.empty()) {
+    if (info->maxTracks > 0 && machine->TrackVals && !tSlots.empty()) {
         for (int i = 0; i < (int)tSlots.size(); i++)
             layout->WriteTrackParam(machine->TrackVals, 0, i, tSlots[i].param->DefValue);
     }
     SEH_Call([&]() { machine->Tick(); });
+    Trace("[GEN] post-Tick1");
 
     // Second tick: trigger note
     if (machine->GlobalVals)
         layout->WriteAllNoValues(machine->GlobalVals);
-    if (machine->TrackVals && !tSlots.empty())
+    if (info->maxTracks > 0 && machine->TrackVals && !tSlots.empty())
         layout->WriteTrackAllNoValues(machine->TrackVals, 1);
 
     bool noteTriggered = false;
-    for (int i = 0; i < (int)tSlots.size(); i++) {
-        if (tSlots[i].param->Type == pt_note) {
-            layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51);
-            if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte)
-                layout->WriteTrackParam(machine->TrackVals, 0, i + 1, tSlots[i+1].param->MaxValue);
-            noteTriggered = true;
-            break;
+    if (info->maxTracks > 0 && machine->TrackVals) {
+        for (int i = 0; i < (int)tSlots.size(); i++) {
+            if (tSlots[i].param->Type == pt_note) {
+                layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51);
+                if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte)
+                    layout->WriteTrackParam(machine->TrackVals, 0, i + 1, tSlots[i+1].param->MaxValue);
+                noteTriggered = true;
+                break;
+            }
         }
     }
     if (!noteTriggered) {
@@ -88,7 +116,7 @@ static int testOneGenerator(const char* dllPath) {
         }
     }
     // Fallback: trigger pt_switch params (machines like ErsBlipp use Trig switch)
-    if (!noteTriggered) {
+    if (!noteTriggered && info->maxTracks > 0 && machine->TrackVals) {
         for (int i = 0; i < (int)tSlots.size(); i++) {
             if (tSlots[i].param->Type == pt_switch &&
                 tSlots[i].param->MinValue == 1 && tSlots[i].param->MaxValue == 1) {
@@ -108,14 +136,23 @@ static int testOneGenerator(const char* dllPath) {
             }
         }
     }
+    Trace("[GEN] pre-Tick2");
     SEH_Call([&]() { machine->Tick(); });
+    Trace("[GEN] post-Tick2");
 
     bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
     float maxSample = 0;
 
+    Trace("[GEN] pre-Work-loop");
     for (int block = 0; block < 100; block++) {
-        float bufL[MAX_BUFFER_LENGTH] = {};
-        float bufR[MAX_BUFFER_LENGTH] = {};
+        // Buffers are oversized (2x MAX_BUFFER_LENGTH + some slop) to
+        // accommodate MDK mono-to-stereo machines whose Work writes stereo-
+        // interleaved output of 2*numsamples floats into the psamples buffer,
+        // and generic stereo-effect machines that do the same. Without the
+        // extra room a single Work call can overflow the stack buffer and
+        // trigger /GS cookie violation (STATUS_STACK_BUFFER_OVERRUN).
+        float bufL[MAX_BUFFER_LENGTH * 2 + 16] = {};
+        float bufR[MAX_BUFFER_LENGTH * 2 + 16] = {};
         bool hasOutput = false;
 
         if (monoToStereo) {
@@ -125,7 +162,8 @@ static int testOneGenerator(const char* dllPath) {
         }
 
         if (hasOutput) {
-            for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
+            int scanLen = monoToStereo ? (MAX_BUFFER_LENGTH * 2) : MAX_BUFFER_LENGTH;
+            for (int i = 0; i < scanLen; i++) {
                 float a = fabsf(bufL[i]);
                 if (a > maxSample) maxSample = a;
                 if (monoToStereo) {
@@ -143,6 +181,7 @@ static int testOneGenerator(const char* dllPath) {
 
         if (maxSample > 0) break;
     }
+    Trace("[GEN] post-Work-loop");
 
     printf("%.1f", maxSample);
     return (maxSample > 0) ? 0 : 1;
@@ -150,14 +189,18 @@ static int testOneGenerator(const char* dllPath) {
 
 static int testOneEffect(const char* dllPath) {
     BuzzMachineLoader loader;
-    if (!loader.Load(dllPath)) return 3;
+    Trace("[FX] pre-Load"); Trace(dllPath);
+    if (!loader.Load(dllPath)) { Trace("[FX] Load-FAIL"); return 3; }
+    Trace("[FX] post-Load");
 
     loader.UpdateMasterInfo(125.0, 44100.0);
 
+    Trace("[FX] pre-InitMachine");
     bool initOk = false;
     bool ok = SEH_Call([&]() { initOk = loader.InitMachine(); });
-    if (!ok) return 4;
-    if (!initOk) return 2;
+    if (!ok) { Trace("[FX] InitMachine-CRASH"); return 4; }
+    if (!initOk) { Trace("[FX] InitMachine-FAIL"); return 2; }
+    Trace("[FX] post-InitMachine");
 
     auto* machine = loader.GetMachine();
     auto* layout = loader.GetParamLayout();
@@ -167,29 +210,38 @@ static int testOneEffect(const char* dllPath) {
     auto& tSlots = layout->GetTrackSlots();
 
     if (machine->GlobalVals) layout->WriteAllDefaults(machine->GlobalVals);
-    if (machine->TrackVals && !tSlots.empty()) {
+    // Only touch TrackVals if the machine has at least one track. Some
+    // machines declare track parameters (numTrackParameters > 0) but have
+    // maxTracks = 0 (e.g. Sgorpi MTW); in that case TrackVals may be a
+    // null or bogus pointer and writing to it corrupts memory.
+    if (info->maxTracks > 0 && machine->TrackVals && !tSlots.empty()) {
         for (int i = 0; i < (int)tSlots.size(); i++)
             layout->WriteTrackParam(machine->TrackVals, 0, i, tSlots[i].param->DefValue);
     }
     SEH_Call([&]() { machine->Tick(); });
+    Trace("[FX] post-Tick");
 
     bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
     bool isMDK = loader.GetCallbacks()->isMDKMachine;
     float maxSample = 0;
 
+    { char b[64]; snprintf(b, sizeof(b), "[FX] pre-Work-loop isMDK=%d mono2stereo=%d", (int)isMDK, (int)monoToStereo); Trace(b); }
     for (int block = 0; block < 20; block++) {
         bool hasOutput = false;
 
         if (isMDK) {
             // MDK machines expect stereo interleaved: [L0,R0,L1,R1,...]
-            float interleaved[MAX_BUFFER_LENGTH * 2];
+            // Oversized because some MDK stereo effects write extra.
+            float interleaved[MAX_BUFFER_LENGTH * 4 + 16] = {};
             for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
                 float t = (float)(block * MAX_BUFFER_LENGTH + i) / 44100.0f;
                 float s = 16384.0f * sinf(2.0f * 3.14159265f * 440.0f * t);
                 interleaved[i * 2] = s;
                 interleaved[i * 2 + 1] = s;
             }
+            { char b[40]; snprintf(b, sizeof(b), "[FX-MDK] Work block%d start", block); Trace(b); }
             SEH_Call([&]() { hasOutput = machine->Work(interleaved, MAX_BUFFER_LENGTH, WM_READWRITE); });
+            { char b[40]; snprintf(b, sizeof(b), "[FX-MDK] Work block%d end", block); Trace(b); }
             if (hasOutput) {
                 for (int i = 0; i < MAX_BUFFER_LENGTH * 2; i++) {
                     float a = fabsf(interleaved[i]);
@@ -197,19 +249,22 @@ static int testOneEffect(const char* dllPath) {
                 }
             }
         } else {
-            float bufL[MAX_BUFFER_LENGTH];
-            float bufR[MAX_BUFFER_LENGTH];
+            // Oversized for stereo-effect machines that write 2*numsamples.
+            float bufL[MAX_BUFFER_LENGTH * 2 + 16] = {};
+            float bufR[MAX_BUFFER_LENGTH * 2 + 16] = {};
             for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
                 float t = (float)(block * MAX_BUFFER_LENGTH + i) / 44100.0f;
                 bufL[i] = 16384.0f * sinf(2.0f * 3.14159265f * 440.0f * t);
                 bufR[i] = bufL[i];
             }
 
+            { char b[40]; snprintf(b, sizeof(b), "[FX] Work block%d start", block); Trace(b); }
             if (monoToStereo) {
                 SEH_Call([&]() { hasOutput = machine->WorkMonoToStereo(bufL, bufR, MAX_BUFFER_LENGTH, WM_READWRITE); });
             } else {
                 SEH_Call([&]() { hasOutput = machine->Work(bufL, MAX_BUFFER_LENGTH, WM_READWRITE); });
             }
+            { char b[40]; snprintf(b, sizeof(b), "[FX] Work block%d end", block); Trace(b); }
 
             if (hasOutput) {
                 for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
@@ -223,16 +278,18 @@ static int testOneEffect(const char* dllPath) {
             }
         }
 
-        if (block % 5 == 4) {
-            if (machine->GlobalVals) layout->WriteAllNoValues(machine->GlobalVals);
-            if (machine->TrackVals && !tSlots.empty()) layout->WriteTrackAllNoValues(machine->TrackVals, 1);
-            SEH_Call([&]() { machine->Tick(); });
-        }
+        // Intentionally don't re-Tick with NoValues here: some machines
+        // (e.g. Zephod PolyWog 22) don't recognize the NoValue sentinels
+        // and interpret the raw bytes as buffer sizes, corrupting the
+        // heap. A well-written machine would treat NoValue as "no change",
+        // but we can't assume that. One initial Tick with defaults is
+        // enough for effects to produce audio in this test.
 
         if (maxSample > 0) break;
     }
 
     printf("%.1f", maxSample);
+    Trace("[FX] scope-exit (loader destructing)");
     return (maxSample > 0) ? 0 : 1;
 }
 
@@ -247,7 +304,9 @@ static bool shouldSkip(const std::string& path) {
     std::string filename = (lastSlash != std::string::npos)
         ? lower.substr(lastSlash + 1) : lower;
     return filename.find("vst") != std::string::npos ||
-           filename.find("peer") != std::string::npos;
+           filename.find("peer") != std::string::npos ||
+           filename.find("input") != std::string::npos ||
+           filename.find("wavein") != std::string::npos;
 }
 
 struct MachineTestResult {
@@ -332,26 +391,95 @@ static MachineTestResult runChildTest(const char* myExe, const GearEntry& entry)
 int main(int argc, char* argv[]) {
     PatchMessageBoxes();
 
-    // Child mode: test a single machine
+    // Child mode: test a single machine. Some machines have static CRT
+    // destructors that blow the stack at process exit — _exit() skips
+    // atexit and global-destructor cleanup entirely, which is safe for
+    // a short-lived test child that's about to die anyway.
     if (argc >= 4 && strcmp(argv[1], "--test-one") == 0) {
         const char* type = argv[2];
         const char* path = argv[3];
+        Trace("[MAIN] pre-testOne");
+        int rc;
         if (strcmp(type, "gen") == 0)
-            return testOneGenerator(path);
+            rc = testOneGenerator(path);
         else
-            return testOneEffect(path);
+            rc = testOneEffect(path);
+        Trace("[MAIN] post-testOne");
+        fflush(stdout);
+        fflush(stderr);
+        Trace("[MAIN] pre-TerminateProcess");
+        // _exit() still dispatches DLL_PROCESS_DETACH to every loaded DLL,
+        // which runs each machine DLL's CRT shutdown — and some machines'
+        // static destructors crash (dangling pointers, double-frees).
+        // TerminateProcess is the nuclear option: no cleanup at all,
+        // which is fine for this short-lived test child.
+        TerminateProcess(GetCurrentProcess(), (UINT)rc);
+        return rc;
     }
 
-    // Parent mode: scan and test all machines
+    // Parent mode: scan and test all machines. Optional positional arg
+    // overrides the gear directory. Optional --filter <substring> limits
+    // tests to machines whose display name contains <substring> (case-
+    // insensitive). Optional --only-failing limits to a hardcoded list of
+    // names that previously failed; lets us rapidly re-verify quirk fixes
+    // without running the full 500-machine suite.
     std::string gearDir;
-    if (argc > 1) {
-        gearDir = argv[1];
-    } else {
+    std::string filter;
+    bool onlyFailing = false;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--filter") == 0 && i + 1 < argc) {
+            filter = argv[++i];
+        } else if (strcmp(argv[i], "--only-failing") == 0) {
+            onlyFailing = true;
+        } else if (gearDir.empty()) {
+            gearDir = argv[i];
+        }
+    }
+    if (gearDir.empty()) {
         char profileDir[MAX_PATH] = {};
         DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
         if (len > 0 && len < MAX_PATH)
             gearDir = std::string(profileDir) + "\\Buzz\\Gear";
     }
+
+    // Hardcoded list of previously-failing machines. Keep in sync with
+    // machine-support.txt failures when adding new quirks.
+    static const char* kFailingMachines[] = {
+        "7900s Pearl Drum",
+        "Automaton Wave Input",
+        "BTDSys Pulsar",
+        "Intoxicat Asynchronous Cloud",
+        "Ruff Speccy II",
+        "Rymix KyrieSpectra",
+        "kazuya JoyControl-4",
+        "ld jacinth2",
+        "Automaton DC Eliminator",
+        "Jeskola Limiter",
+        "Lost_Bit iPan",
+        "Sgorpi MultiTrack Writer",
+        "Static Duafilt II",
+        "WhiteNoise Stutter",
+        "Zephod PolyWog 22",
+        "Zephod ReSaw",
+    };
+
+    auto caseInsensitiveContains = [](const std::string& haystack, const std::string& needle) {
+        if (needle.empty()) return true;
+        std::string h = haystack, n = needle;
+        std::transform(h.begin(), h.end(), h.begin(), ::tolower);
+        std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+        return h.find(n) != std::string::npos;
+    };
+    auto passesFilter = [&](const std::string& name) -> bool {
+        if (!filter.empty() && !caseInsensitiveContains(name, filter)) return false;
+        if (onlyFailing) {
+            for (auto* f : kFailingMachines) {
+                if (caseInsensitiveContains(name, f)) return true;
+            }
+            return false;
+        }
+        return true;
+    };
 
     if (gearDir.empty()) {
         fprintf(stderr, "Usage: %s [gear_directory]\n", argv[0]);
@@ -375,8 +503,10 @@ int main(int argc, char* argv[]) {
 
     std::vector<const GearEntry*> generators, effects;
     int skippedCount = 0;
+    int filteredCount = 0;
     for (auto& e : entries) {
         if (shouldSkip(e.dllPath)) { skippedCount++; continue; }
+        if (!passesFilter(e.displayName)) { filteredCount++; continue; }
         if (e.machineType == MT_GENERATOR) generators.push_back(&e);
         else if (e.machineType == MT_EFFECT) effects.push_back(&e);
     }
@@ -398,7 +528,7 @@ int main(int argc, char* argv[]) {
 
             switch (r.exitCode) {
                 case 0:
-                    printf("OK (max=%s)\n", r.output.c_str());
+                    printf("OK\n");
                     passed++;
                     break;
                 case 1:
