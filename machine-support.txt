@@ -3,19 +3,19 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
 
 === GENERATORS ===
   3Dizer Listener Control                  NO OUTPUT
-  Geonik's Expression 2                    NO AUDIO
-  Zwar's Repeater                          NO AUDIO
-  11-MidiCCout v1.0                        NO AUDIO
+  Geonik's Expression 2                    SILENT
+  Zwar's Repeater                          OK
+  11-MidiCCout v1.0                        SILENT
   2ndP IGroove                             NO OUTPUT
   2ndP MGroove                             NO OUTPUT
-  7900s Elgam Crazy Band 48                NO AUDIO
+  7900s Elgam Crazy Band 48                SILENT
   7900s Pearl Drum                         OK
   7900s XY Controller                      NO OUTPUT
-  BTDSys Pulsar                            NO AUDIO
-  BTDSys Stutter                           NO AUDIO
-  Click'n'Pop generator                    NO AUDIO
+  BTDSys Pulsar                            SILENT
+  BTDSys Stutter                           SILENT
+  Click'n'Pop generator                    OK
   Climox 303 v2.10.1                       OK
-  Climox Breaker v1.0                      NO AUDIO
+  Climox Breaker v1.0                      SILENT
   CyanPhase DTMF-1                         OK
   Elenzil Frequency Bomb                   OK
   ErsBlipp                                 OK
@@ -26,67 +26,67 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   ErsKick                                  OK
   ErsSnare                                 OK
   FSM ArpMan                               OK
-  FSM Infector                             OK
-  FSM Kick                                 NO AUDIO
+  FSM Infector                             SILENT
+  FSM Kick                                 OK
   FSM Kick XP                              OK
   FUK FIRe Synth                           OK
-  Frequency UnKnown Freq In                NO AUDIO
+  Frequency UnKnown Freq In                SILENT
   Frequency UnKnown Mr Brown               OK
   Fuzzpilz Kitchen Sink 2                  OK
   Fuzzpilz Orange Kid                      OK
-  Fuzzpilz Trigger Trigger                 NO AUDIO
-  Fuzzpilz UnwieldyTracker                 NO AUDIO
+  Fuzzpilz Trigger Trigger                 OK
+  Fuzzpilz UnwieldyTracker                 SILENT
   Geonik's Omega-1                         NO AUDIO
   Geonik's Plucked String                  OK
   Geonik's PrimiFun                        OK
-  HACK P. DooM's Jump                      NO AUDIO
+  HACK P. DooM's Jump                      SILENT
   HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
-  HD GARAGE  (hd.gut.ru - hdd@nm.ru)       NO AUDIO
+  HD GARAGE  (hd.gut.ru - hdd@nm.ru)       SILENT
   HD Guitar at hd.ozz.ru - beta            OK
   HD Master Kick (No liner!)               OK
   HD OzO (beta version)                    OK
-  HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   NO AUDIO
-  HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    NO AUDIO
+  HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   SILENT
+  HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    SILENT
   HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
-  HNO3 Divine Intervention                 NO AUDIO
+  HNO3 Divine Intervention                 SILENT
   Harcs WARP                               NO AUDIO
   IX Split 1.07                            NO OUTPUT
   IX Split 1.08                            NO OUTPUT
-  Intoxicat Asynchronous Cloud             NO AUDIO
-  Intoxicat Asynchronous Cloud             NO AUDIO
+  Intoxicat Asynchronous Cloud             SILENT
+  Intoxicat Asynchronous Cloud             SILENT
   Jeskola Bass                             OK
   Jeskola ES-9                             OK
   Jeskola PM Bass                          OK
   Jeskola PM Bass                          OK
   Jeskola Pianoroll                        NO OUTPUT
-  Jeskola Trilok                           NO AUDIO
-  Lipid Impulse Tracker Module Loader      NO AUDIO
+  Jeskola Trilok                           SILENT
+  Lipid Impulse Tracker Module Loader      SILENT
   MadBrain's 4fm2f                         OK
   MadBrain's D500                          OK
   MadBrain's Dynamite 6 1.2                OK
   MadBrain's Table Warp                    OK
-  Matilde Tracker                          NO AUDIO
-  Matilde Tracker2                         NO AUDIO
-  Mp3 Loader Version 0.1                   NO AUDIO
+  Matilde Tracker                          SILENT
+  Matilde Tracker2                         SILENT
+  Mp3 Loader Version 0.1                   SILENT
   Muon Synth                               OK
-  Oomek Aggressor 3o3                      NO AUDIO
+  Oomek Aggressor 3o3                      SILENT
   Q Piano                                  OK
-  Rebirth MIDI Controller                  NO AUDIO
-  RectalAnarchy                            NO AUDIO
-  Rout SoundFont Loader                    NO AUDIO
+  Rebirth MIDI Controller                  SILENT
+  RectalAnarchy                            SILENT
+  Rout SoundFont Loader                    SILENT
   Ruff Speccy II                           OK
-  Rymix KyrieSpectra                       NO AUDIO
+  Rymix KyrieSpectra                       SILENT
   Saxpy's HT-700                           OK
-  Sgorpi Clap                              NO AUDIO
-  Sgorpi's Mean Bassdrum Machine           NO AUDIO
-  SuperDonut Ultimate Drum                 NO AUDIO
-  Synthrom Sinus v2.0                      NO AUDIO
+  Sgorpi Clap                              SILENT
+  Sgorpi's Mean Bassdrum Machine           SILENT
+  SuperDonut Ultimate Drum                 SILENT
+  Synthrom Sinus v2.0                      OK
   TEH NOISEMAKING                          OK
   WhiteNoise Scratcher                     NO AUDIO
-  Zephod & Thevider WaveEdit               NO AUDIO
+  Zephod & Thevider WaveEdit               SILENT
   Zephod Blok2009                          OK
-  Zephod DDM-110 Super Drums               NO AUDIO
-  Zephod DDM-110 Super Drums               NO AUDIO
+  Zephod DDM-110 Super Drums               OK
+  Zephod DDM-110 Super Drums               OK
   Zephod Firecracker                       OK
   Zephod HT-700 drums                      OK
   Zephod Magnus                            OK
@@ -95,33 +95,33 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Zephod VoidBass II                       OK
   Zephod VoidLead                          OK
   Zephod VoidSynth II                      OK
-  cmx HD Player v1.00                      NO AUDIO
+  cmx HD Player v1.00                      SILENT
   cmx Wacko T1 v0.90beta                   OK
   cmx Wacko v0.01beta                      NO AUDIO
   farbrausch V2                            OK
   farbrausch V2                            OK
-  hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
+  hd.nm.ru Gen_Station_Ultra_7_Pro-5       SILENT
   hd.ozz.ru Gen_Station_Ultra_6_Lite       OK
   http://hd.nm.ru - Just_Guitar - 2nd edition OK
   intoxicat eight-n - step sequencer       NO OUTPUT
   kazuya Graph-64                          NO OUTPUT
   kazuya JoyControl-4                      NO OUTPUT
-  kejo's Perlin Noise Generator v0.9       NO AUDIO
+  kejo's Perlin Noise Generator v0.9       SILENT
   ld PadSynth                              OK
   ld auricula                              OK
   ld clap                                  OK
   ld cymbal                                OK
-  ld grain                                 NO AUDIO
+  ld grain                                 SILENT
   ld jacinth2                              NO AUDIO
   ld snare                                 OK
-  paniq WavEd                              NO AUDIO
-  paniq's plutonium                        NO AUDIO
+  paniq WavEd                              SILENT
+  paniq's plutonium                        SILENT
   pooplog 8 stage width modulation synth dual envelope OK
   pooplog fast pulse width modulation envelope OK
-  rewire2lnk                               NO AUDIO
-  ruff AMNIBUS                             NO AUDIO
-  ruff KOLOBOK                             NO AUDIO
-  vII MidiOut                              NO AUDIO
+  rewire2lnk                               SILENT
+  ruff AMNIBUS                             SILENT
+  ruff KOLOBOK                             SILENT
+  vII MidiOut                              SILENT
 
 === EFFECTS ===
   10 Band Graphic EQ                       NO AUDIO
@@ -131,8 +131,8 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   11-Distortion v1.0                       OK
   11-RhythmGate v1.1                       NO AUDIO
   11-SignSplit v1.0                        OK
-  11-Zerhacker v0.9                        NO AUDIO
-  2ndP SMix                                NO AUDIO
+  11-Zerhacker v0.9                        OK
+  2ndP SMix                                OK
   2ndProcess Dirtyfier                     OK
   7900s 'Osc' Amplitude Modulator          OK
   AutoFade v1.0                            OK
@@ -169,16 +169,16 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   CyanPhase AutoDC Blocker                 OK
   CyanPhase DMO Adapter                    OK
   CyanPhase DX Effect Adapter              OK
-  CyanPhase JedShivaMeter                  NO AUDIO
+  CyanPhase JedShivaMeter                  OK
   CyanPhase KrashBox                       OK
   CyanPhase M-Derive                       OK
   CyanPhase M-Derive 2                     OK
   CyanPhase M-Integral 2                   NO AUDIO
-  CyanPhase Mono                           NO AUDIO
+  CyanPhase Mono                           OK
   CyanPhase Notch                          OK
   CyanPhase Recorder                       NO OUTPUT
   CyanPhase SongInfo                       NO OUTPUT
-  CyanPhase UnNative Effects               NO AUDIO
+  CyanPhase UnNative Effects               OK
   CyanPhase ViDist 01                      OK
   CyanPhase WaveShaper                     OK
   CyanPhase mC-1                           NO OUTPUT
@@ -251,13 +251,13 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Fuzzpilz LRMS                            OK
   Fuzzpilz Lepidopterist                   OK
   Fuzzpilz Multibandit                     OK
-  Fuzzpilz Oppressor 3                     NO AUDIO
+  Fuzzpilz Oppressor 3                     OK
   Fuzzpilz Pottwal                         OK
-  Fuzzpilz Rosengarten                     OK
+  Fuzzpilz Rosengarten                     NO AUDIO
   Fuzzpilz UnwieldyDelay II                OK
   Fuzzpilz UnwieldyDist                    OK
   Fuzzpilz UnwieldyPitch                   OK
-  GenRe - General Retrigger Machine        NO AUDIO
+  GenRe - General Retrigger Machine        OK
   Geonik's 2p Filter                       OK
   Geonik's Amplitude Modulation            OK
   Geonik's AutoPan                         OK
@@ -287,8 +287,8 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Harcs Signal Analyser                    OK
   Harcs Vision                             OK
   Hoester Groove Box                       OK
-  IX Strip 1.0b                            NO AUDIO
-  Intoxicat Dub Delay                      NO AUDIO
+  IX Strip 1.0b                            OK
+  Intoxicat Dub Delay                      OK
   J.R. BP V1 Filter                        OK
   J.R. BP V2 Filter                        OK
   J.R. HP Filter                           OK
@@ -305,7 +305,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Jeskola Flanger                          OK
   Jeskola Karhu                            OK
   Jeskola Limiter                          OK
-  Jeskola Raverb                           NO AUDIO
+  Jeskola Raverb                           OK
   Jeskola Spatializer                      OK
   Jeskola Tube Amp                         OK
   Jeskola Wave Shaper                      OK
@@ -317,13 +317,13 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Joachims DeNoiser                        OK
   Joachims DeepPan                         OK
   Joachims Hyperion v1.0                   OK
-  Joachims Jupiter v2                      NO AUDIO
+  Joachims Jupiter v2                      OK
   Joachims Limiter v3                      OK
   Joachims Linkwitz-Riley v1.0             OK
   Joachims Mars filter v2.2                OK
   Joachims Mercury filter                  OK
   Joachims Multi v2                        OK
-  Joachims Neptune v1                      NO AUDIO
+  Joachims Neptune v1                      OK
   Joachims Overdrive                       OK
   Joachims Pluto v1.3n                     OK
   Joachims PowerPan                        OK
@@ -332,20 +332,20 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Joachims Tethys v1.3                     OK
   Joachims Uranus v0.6 beta                OK
   Joystick Filter 1                        NO AUDIO
-  KBP's Reversor                           NO AUDIO
+  KBP's Reversor                           OK
   Komi::Chaoticon !                        OK
-  KrimZon NocturnalTransmitter v1.1.0      NO AUDIO
+  KrimZon NocturnalTransmitter v1.1.0      OK
   LD Declicker v1.0.3                      OK
   LarsHa Funkyverb                         OK
-  LarsHaKa rIDMa                           NO AUDIO
+  LarsHaKa rIDMa                           OK
   LazyPanner                               OK
   LdC Automax                              OK
   LdC Destroyer                            OK
-  LdC Trigger                              NO AUDIO
+  LdC Trigger                              OK
   Lost_Bit iPan                            LOAD FAIL
   Lost_Bit improved MoDulator              OK
   Lysergia Gapper                          OK
-  MT Side Chain                            NO AUDIO
+  MT Side Chain                            OK
   MadBrain's LeeterDrive                   OK
   MadBrain's NeaterDrive                   OK
   MadBrain's Unsign                        OK
@@ -401,29 +401,29 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   WhiteNoise Ringmod                       OK
   WhiteNoise Stereo Mod                    OK
   WhiteNoise Stereo-dist                   OK
-  WhiteNoise Stutter                       NO AUDIO
+  WhiteNoise Stutter                       OK
   WhiteNoise Verb                          OK
   WhiteNoise's Filtron                     OK
-  WhiteNoise's Harmonic Delay              NO AUDIO
+  WhiteNoise's Harmonic Delay              OK
   WhiteNoise's HiFiltron                   OK
   Ynzn's 3D Fx Simulator                   OK
   ZWAR's Swapper                           OK
   ZWAR's Swapper                           OK
-  Zephod ADSR                              NO AUDIO
+  Zephod ADSR                              OK
   Zephod ADSRfilter                        OK
   Zephod Autopan                           OK
   Zephod Blue Filter                       OK
   Zephod EKKY                              OK
-  Zephod Enveloper                         NO AUDIO
+  Zephod Enveloper                         OK
   Zephod Freefilter                        NO AUDIO
-  Zephod GAIN                              NO AUDIO
+  Zephod GAIN                              OK
   Zephod Green Filter                      OK
   Zephod ITCH!                             OK
   Zephod MoogFiltah                        NO AUDIO
   Zephod Orange Filter                     OK
   Zephod PAN                               OK
   Zephod PolyWog 22                        OK
-  Zephod ReSaw                             NO AUDIO
+  Zephod ReSaw                             OK
   Zephod SPREAD                            OK
   Zephod Scope                             OK
   Zephod WUZZ                              OK
@@ -432,7 +432,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Zephods Paniq!                           OK
   Zephods gurufilter                       OK
   Zu Parametric EQ                         OK
-  Zu Slicer                                NO AUDIO
+  Zu Slicer                                OK
   Zu Tube Head                             OK
   Zu µTaps                                 OK
   aNEurYSm DistGarb                        OK
@@ -451,7 +451,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   asedev aEcho01                           OK
   asedev aReverb01                         OK
   asedev sSpread01                         OK
-  cheapo amp                               NO AUDIO
+  cheapo amp                               OK
   cheapo do-nothing                        OK
   chrisisasavage Skweeler                  OK
   edexters logriser                        OK
@@ -466,7 +466,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   kibibu Inversor                          OK
   kibibu Left                              OK
   kibibu MidSide to Stereo                 OK
-  kibibu MultiMerge                        NO AUDIO
+  kibibu MultiMerge                        OK
   kibibu Revolving Pan                     OK
   kibibu Revolving Pan with LFO            OK
   kibibu Right                             OK
@@ -483,24 +483,25 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   paniq & zephod's ventilator              OK
   synopia 3Dizer Buffer Control            NO OUTPUT
   synopia EAX2.0 Output                    NO AUDIO
-  tonIO                                    NO AUDIO
+  tonIO                                    OK
   vII Graphity                             NO AUDIO
   11-FM v1.0                               OK
   Analog Distortion                        OK
   BTDSys PulsarFX                          OK
-  BTDSys SampleGrid Out                    NO AUDIO
+  BTDSys SampleGrid Out                    OK
   Bigyo 2p Filter                          OK
-  Fuzzpilz Otter                           NO AUDIO
-  Intoxicat Grain Delay                    NO AUDIO
-  Magicfish IT Sample Loader               NO AUDIO
-  Morex 32-Bit Stereo Wave In              NO AUDIO
+  Fuzzpilz Otter                           OK
+  Intoxicat Grain Delay                    OK
+  Magicfish IT Sample Loader               OK
+  Morex 32-Bit Stereo Wave In              OK
   Zephod FFTsynth                          NO AUDIO
-  ld grain fx                              NO AUDIO
+  ld grain fx                              OK
 
 ========================================
-Results: 371/475 passed (17 no-output machines excluded)
-  Audio OK:    371
-  No audio:    103
+Results: 409/435 passed (17 no-output, 40 silent excluded)
+  Audio OK:    409
+  No audio:    25  (Work returned true but buffer was zero)
+  Silent:      40  (Work never returned true â€” likely control-only)
   No output:   17  (flagged MIF_NO_OUTPUT/MIF_CONTROL_MACHINE)
   Load failed: 1
   Init failed: 0
@@ -509,107 +510,29 @@ Results: 371/475 passed (17 no-output machines excluded)
 ========================================
 
 Failed machines:
-  [GEN] Geonik's Expression 2                    NO AUDIO
-  [GEN] Zwar's Repeater                          NO AUDIO
-  [GEN] 11-MidiCCout v1.0                        NO AUDIO
-  [GEN] 7900s Elgam Crazy Band 48                NO AUDIO
-  [GEN] BTDSys Pulsar                            NO AUDIO
-  [GEN] BTDSys Stutter                           NO AUDIO
-  [GEN] Click'n'Pop generator                    NO AUDIO
-  [GEN] Climox Breaker v1.0                      NO AUDIO
-  [GEN] FSM Kick                                 NO AUDIO
-  [GEN] Frequency UnKnown Freq In                NO AUDIO
-  [GEN] Fuzzpilz Trigger Trigger                 NO AUDIO
-  [GEN] Fuzzpilz UnwieldyTracker                 NO AUDIO
   [GEN] Geonik's Omega-1                         NO AUDIO
-  [GEN] HACK P. DooM's Jump                      NO AUDIO
   [GEN] HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
-  [GEN] HD GARAGE  (hd.gut.ru - hdd@nm.ru)       NO AUDIO
-  [GEN] HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   NO AUDIO
-  [GEN] HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    NO AUDIO
   [GEN] HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
-  [GEN] HNO3 Divine Intervention                 NO AUDIO
   [GEN] Harcs WARP                               NO AUDIO
-  [GEN] Intoxicat Asynchronous Cloud             NO AUDIO
-  [GEN] Intoxicat Asynchronous Cloud             NO AUDIO
-  [GEN] Jeskola Trilok                           NO AUDIO
-  [GEN] Lipid Impulse Tracker Module Loader      NO AUDIO
-  [GEN] Matilde Tracker                          NO AUDIO
-  [GEN] Matilde Tracker2                         NO AUDIO
-  [GEN] Mp3 Loader Version 0.1                   NO AUDIO
-  [GEN] Oomek Aggressor 3o3                      NO AUDIO
-  [GEN] Rebirth MIDI Controller                  NO AUDIO
-  [GEN] RectalAnarchy                            NO AUDIO
-  [GEN] Rout SoundFont Loader                    NO AUDIO
-  [GEN] Rymix KyrieSpectra                       NO AUDIO
-  [GEN] Sgorpi Clap                              NO AUDIO
-  [GEN] Sgorpi's Mean Bassdrum Machine           NO AUDIO
-  [GEN] SuperDonut Ultimate Drum                 NO AUDIO
-  [GEN] Synthrom Sinus v2.0                      NO AUDIO
   [GEN] WhiteNoise Scratcher                     NO AUDIO
-  [GEN] Zephod & Thevider WaveEdit               NO AUDIO
-  [GEN] Zephod DDM-110 Super Drums               NO AUDIO
-  [GEN] Zephod DDM-110 Super Drums               NO AUDIO
-  [GEN] cmx HD Player v1.00                      NO AUDIO
   [GEN] cmx Wacko v0.01beta                      NO AUDIO
-  [GEN] hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
-  [GEN] kejo's Perlin Noise Generator v0.9       NO AUDIO
-  [GEN] ld grain                                 NO AUDIO
   [GEN] ld jacinth2                              NO AUDIO
-  [GEN] paniq WavEd                              NO AUDIO
-  [GEN] paniq's plutonium                        NO AUDIO
-  [GEN] rewire2lnk                               NO AUDIO
-  [GEN] ruff AMNIBUS                             NO AUDIO
-  [GEN] ruff KOLOBOK                             NO AUDIO
-  [GEN] vII MidiOut                              NO AUDIO
   [FX] 10 Band Graphic EQ                       NO AUDIO
   [FX] 11-RhythmGate v1.1                       NO AUDIO
-  [FX] 11-Zerhacker v0.9                        NO AUDIO
-  [FX] 2ndP SMix                                NO AUDIO
   [FX] Automaton 2-pole                         NO AUDIO
   [FX] Automaton Parametric EQ                  NO AUDIO
   [FX] Chun-Yu's TouchWah                       NO AUDIO
-  [FX] CyanPhase JedShivaMeter                  NO AUDIO
   [FX] CyanPhase M-Integral 2                   NO AUDIO
-  [FX] CyanPhase Mono                           NO AUDIO
-  [FX] CyanPhase UnNative Effects               NO AUDIO
   [FX] DedaCode Slicer                          NO AUDIO
   [FX] Dimage's Exponent Distortion             NO AUDIO
   [FX] FSM WahMan Pro 2                         NO AUDIO
   [FX] FSM WahMan Pro 2                         NO AUDIO
-  [FX] Fuzzpilz Oppressor 3                     NO AUDIO
-  [FX] GenRe - General Retrigger Machine        NO AUDIO
-  [FX] IX Strip 1.0b                            NO AUDIO
-  [FX] Intoxicat Dub Delay                      NO AUDIO
-  [FX] Jeskola Raverb                           NO AUDIO
-  [FX] Joachims Jupiter v2                      NO AUDIO
-  [FX] Joachims Neptune v1                      NO AUDIO
+  [FX] Fuzzpilz Rosengarten                     NO AUDIO
   [FX] Joystick Filter 1                        NO AUDIO
-  [FX] KBP's Reversor                           NO AUDIO
-  [FX] KrimZon NocturnalTransmitter v1.1.0      NO AUDIO
-  [FX] LarsHaKa rIDMa                           NO AUDIO
-  [FX] LdC Trigger                              NO AUDIO
   [FX] Lost_Bit iPan                            LOAD
-  [FX] MT Side Chain                            NO AUDIO
-  [FX] WhiteNoise Stutter                       NO AUDIO
-  [FX] WhiteNoise's Harmonic Delay              NO AUDIO
-  [FX] Zephod ADSR                              NO AUDIO
-  [FX] Zephod Enveloper                         NO AUDIO
   [FX] Zephod Freefilter                        NO AUDIO
-  [FX] Zephod GAIN                              NO AUDIO
   [FX] Zephod MoogFiltah                        NO AUDIO
-  [FX] Zephod ReSaw                             NO AUDIO
-  [FX] Zu Slicer                                NO AUDIO
-  [FX] cheapo amp                               NO AUDIO
   [FX] kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
-  [FX] kibibu MultiMerge                        NO AUDIO
   [FX] synopia EAX2.0 Output                    NO AUDIO
-  [FX] tonIO                                    NO AUDIO
   [FX] vII Graphity                             NO AUDIO
-  [FX] BTDSys SampleGrid Out                    NO AUDIO
-  [FX] Fuzzpilz Otter                           NO AUDIO
-  [FX] Intoxicat Grain Delay                    NO AUDIO
-  [FX] Magicfish IT Sample Loader               NO AUDIO
-  [FX] Morex 32-Bit Stereo Wave In              NO AUDIO
   [FX] Zephod FFTsynth                          NO AUDIO
-  [FX] ld grain fx                              NO AUDIO

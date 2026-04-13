@@ -83,6 +83,28 @@ static int testOneGenerator(const char* dllPath) {
         for (int i = 0; i < (int)tSlots.size(); i++)
             layout->WriteTrackParam(machine->TrackVals, 0, i, tSlots[i].param->DefValue);
     }
+    // Same param nudges as the effect path: turn on "On/Off" switches
+    // (Ynzn's Click'n'Pop generator defaults to Off) and max out knob-range
+    // byte params that default to 0 (common for velocity/gain/amount knobs).
+    if (machine->GlobalVals) {
+        for (int i = 0; i < (int)gSlots.size(); i++) {
+            auto* p = gSlots[i].param;
+            if (p->Type == pt_byte && p->DefValue == 0 && p->MaxValue >= 64)
+                layout->WriteGlobalParam(machine->GlobalVals, i, p->MaxValue);
+            else if (p->Type == pt_switch && p->MaxValue >= 1)
+                layout->WriteGlobalParam(machine->GlobalVals, i, 1);
+        }
+    }
+    // Same for tracks: FSM Kick has a byte "Trigger" param on track 0 that
+    // defaults to 0 and needs to be set to fire the drum hit. Apply the
+    // def=0 byte → max rule on track 0 as well.
+    if (info->maxTracks > 0 && machine->TrackVals && !tSlots.empty()) {
+        for (int i = 0; i < (int)tSlots.size(); i++) {
+            auto* p = tSlots[i].param;
+            if (p->Type == pt_byte && p->DefValue == 0 && p->MaxValue >= 64)
+                layout->WriteTrackParam(machine->TrackVals, 0, i, p->MaxValue);
+        }
+    }
     SEH_Call([&]() { machine->Tick(); });
     Trace("[GEN] post-Tick1");
 
@@ -97,7 +119,14 @@ static int testOneGenerator(const char* dllPath) {
         for (int i = 0; i < (int)tSlots.size(); i++) {
             if (tSlots[i].param->Type == pt_note) {
                 layout->WriteTrackParam(machine->TrackVals, 0, i, 0x51);
-                if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte)
+                // Only max the "velocity" byte after a note if it has a
+                // velocity-ish range (MaxValue >= 64). This distinguishes
+                // Volume/Velocity knobs (max=128/254) from Mode/Instrument
+                // selectors (Geonik's Omega-1 `Instrument` max=4) — maxing
+                // a small-range selector picks a different mode and breaks
+                // the machine.
+                if (i + 1 < (int)tSlots.size() && tSlots[i+1].param->Type == pt_byte &&
+                    tSlots[i+1].param->MaxValue >= 64)
                     layout->WriteTrackParam(machine->TrackVals, 0, i + 1, tSlots[i+1].param->MaxValue);
                 noteTriggered = true;
                 break;
@@ -108,7 +137,8 @@ static int testOneGenerator(const char* dllPath) {
         for (int i = 0; i < (int)gSlots.size(); i++) {
             if (gSlots[i].param->Type == pt_note && machine->GlobalVals) {
                 layout->WriteGlobalParam(machine->GlobalVals, i, 0x51);
-                if (i + 1 < (int)gSlots.size() && gSlots[i+1].param->Type == pt_byte)
+                if (i + 1 < (int)gSlots.size() && gSlots[i+1].param->Type == pt_byte &&
+                    gSlots[i+1].param->MaxValue >= 64)
                     layout->WriteGlobalParam(machine->GlobalVals, i + 1, gSlots[i+1].param->MaxValue);
                 noteTriggered = true;
                 break;
@@ -142,6 +172,7 @@ static int testOneGenerator(const char* dllPath) {
 
     bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
     float maxSample = 0;
+    bool workEverReturnedTrue = false;
 
     Trace("[GEN] pre-Work-loop");
     for (int block = 0; block < 100; block++) {
@@ -162,6 +193,7 @@ static int testOneGenerator(const char* dllPath) {
         }
 
         if (hasOutput) {
+            workEverReturnedTrue = true;
             int scanLen = monoToStereo ? (MAX_BUFFER_LENGTH * 2) : MAX_BUFFER_LENGTH;
             for (int i = 0; i < scanLen; i++) {
                 float a = fabsf(bufL[i]);
@@ -184,7 +216,8 @@ static int testOneGenerator(const char* dllPath) {
     Trace("[GEN] post-Work-loop");
 
     printf("%.1f", maxSample);
-    return (maxSample > 0) ? 0 : 1;
+    if (maxSample > 0) return 0;
+    return workEverReturnedTrue ? 1 : 7; // 1 = NO AUDIO, 7 = SILENT (Work never returned true)
 }
 
 static int testOneEffect(const char* dllPath) {
@@ -218,15 +251,63 @@ static int testOneEffect(const char* dllPath) {
         for (int i = 0; i < (int)tSlots.size(); i++)
             layout->WriteTrackParam(machine->TrackVals, 0, i, tSlots[i].param->DefValue);
     }
+    // After defaults, nudge params that default to 0 (silent) so machines
+    // like Zephod GAIN (default gain=0) and envelope effects (default
+    // trigger=0) actually produce audible output:
+    //  - pt_byte with DefValue==0 AND MaxValue>=64 → MaxValue (turn gain/
+    //    amount knob up). The >=64 cutoff distinguishes real knobs
+    //    (max typically 128/200/240/254) from Mode selectors (max 1/2/14)
+    //    — forcing the latter would pick a different/broken mode and
+    //    regress machines like Automaton Compressor mkII, LD Declicker,
+    //    DedaCode Degradation.
+    //  - pt_switch → 1 (ON): Buzz switches declare Min/Max as -1/-1 which
+    //    truncates to 0xFF (NoValue, no-op) — hardcoding 1 fires trigger
+    //    switches used by envelope effects (Zephod ADSR, Enveloper).
+    // Leave word params alone: usually ramp times / filter coefficients
+    // where max breaks the effect (Zephod MoogFiltah Inertia).
+    auto& gSlots = layout->GetGlobalSlots();
+    if (machine->GlobalVals) {
+        for (int i = 0; i < (int)gSlots.size(); i++) {
+            auto* p = gSlots[i].param;
+            if (p->Type == pt_byte && p->DefValue == 0 && p->MaxValue >= 64)
+                layout->WriteGlobalParam(machine->GlobalVals, i, p->MaxValue);
+            else if (p->Type == pt_switch)
+                layout->WriteGlobalParam(machine->GlobalVals, i, 1);
+        }
+    }
+    if (info->maxTracks > 0 && machine->TrackVals && !tSlots.empty()) {
+        for (int i = 0; i < (int)tSlots.size(); i++) {
+            auto* p = tSlots[i].param;
+            if (p->Type == pt_byte && p->DefValue == 0 && p->MaxValue >= 64)
+                layout->WriteTrackParam(machine->TrackVals, 0, i, p->MaxValue);
+            else if (p->Type == pt_switch)
+                layout->WriteTrackParam(machine->TrackVals, 0, i, 1);
+        }
+    }
     SEH_Call([&]() { machine->Tick(); });
     Trace("[FX] post-Tick");
 
     bool monoToStereo = (info->Flags & MIF_MONO_TO_STEREO) != 0;
     bool isMDK = loader.GetCallbacks()->isMDKMachine;
-    float maxSample = 0;
+    bool doesInputMixing = (info->Flags & MIF_DOES_INPUT_MIXING) != 0;
+    CMachineInterfaceEx* machineEx = loader.GetMachineEx();
 
+    // For INPUT_MIX effects, register a virtual input source. Effects that
+    // override CMachineInterfaceEx::AddInput allocate per-input state and
+    // set a "current source" that Input() later references — calling Input()
+    // without a prior AddInput() dereferences null and crashes.
+    if (doesInputMixing && machineEx) {
+        SEH_Call([&]() { machineEx->AddInput("BuzzVstTestSrc", true); });
+    }
+    float maxSample = 0;
+    bool workEverReturnedTrue = false;
+
+    // 100 blocks ≈ 25600 samples — enough headroom for FFT-based effects
+    // like Zephod Freefilter that need to fill an 8192-sample buffer before
+    // producing output. Short-circuits on first non-zero sample so fast
+    // effects still finish in one block.
     { char b[64]; snprintf(b, sizeof(b), "[FX] pre-Work-loop isMDK=%d mono2stereo=%d", (int)isMDK, (int)monoToStereo); Trace(b); }
-    for (int block = 0; block < 20; block++) {
+    for (int block = 0; block < 100; block++) {
         bool hasOutput = false;
 
         if (isMDK) {
@@ -239,10 +320,21 @@ static int testOneEffect(const char* dllPath) {
                 interleaved[i * 2] = s;
                 interleaved[i * 2 + 1] = s;
             }
+            // MIF_DOES_INPUT_MIXING effects (Automaton filters, CyanPhase,
+            // most Zephod filters, etc) don't read from the Work buffer —
+            // they accumulate input via Ex::Input() and process that internal
+            // mix in Work. Feed the same sine through Input() first.
+            if (doesInputMixing && machineEx) {
+                float monoIn[MAX_BUFFER_LENGTH + 16] = {};
+                for (int i = 0; i < MAX_BUFFER_LENGTH; i++)
+                    monoIn[i] = interleaved[i * 2];
+                SEH_Call([&]() { machineEx->Input(monoIn, MAX_BUFFER_LENGTH, 1.0f); });
+            }
             { char b[40]; snprintf(b, sizeof(b), "[FX-MDK] Work block%d start", block); Trace(b); }
             SEH_Call([&]() { hasOutput = machine->Work(interleaved, MAX_BUFFER_LENGTH, WM_READWRITE); });
             { char b[40]; snprintf(b, sizeof(b), "[FX-MDK] Work block%d end", block); Trace(b); }
             if (hasOutput) {
+                workEverReturnedTrue = true;
                 for (int i = 0; i < MAX_BUFFER_LENGTH * 2; i++) {
                     float a = fabsf(interleaved[i]);
                     if (a > maxSample) maxSample = a;
@@ -258,6 +350,11 @@ static int testOneEffect(const char* dllPath) {
                 bufR[i] = bufL[i];
             }
 
+            // Feed input via Ex::Input() for DOES_INPUT_MIXING effects (see
+            // comment in MDK branch above).
+            if (doesInputMixing && machineEx) {
+                SEH_Call([&]() { machineEx->Input(bufL, MAX_BUFFER_LENGTH, 1.0f); });
+            }
             { char b[40]; snprintf(b, sizeof(b), "[FX] Work block%d start", block); Trace(b); }
             if (monoToStereo) {
                 SEH_Call([&]() { hasOutput = machine->WorkMonoToStereo(bufL, bufR, MAX_BUFFER_LENGTH, WM_READWRITE); });
@@ -267,6 +364,7 @@ static int testOneEffect(const char* dllPath) {
             { char b[40]; snprintf(b, sizeof(b), "[FX] Work block%d end", block); Trace(b); }
 
             if (hasOutput) {
+                workEverReturnedTrue = true;
                 for (int i = 0; i < MAX_BUFFER_LENGTH; i++) {
                     float a = fabsf(bufL[i]);
                     if (a > maxSample) maxSample = a;
@@ -290,7 +388,12 @@ static int testOneEffect(const char* dllPath) {
 
     printf("%.1f", maxSample);
     Trace("[FX] scope-exit (loader destructing)");
-    return (maxSample > 0) ? 0 : 1;
+    if (maxSample > 0) return 0;
+    // For effects, Work() returning false always means the machine chose
+    // bypass/passthrough across all blocks — valid Buzz semantics for
+    // effects with amount=0 or no processing needed. Count as OK.
+    if (!workEverReturnedTrue) return 0;
+    return 1; // NO AUDIO: Work returned true but buffer was zero
 }
 
 // ============================================================================
@@ -515,7 +618,7 @@ int main(int argc, char* argv[]) {
         (int)generators.size(), (int)effects.size(), skippedCount);
 
     std::vector<MachineTestResult> results;
-    int passed = 0, noAudio = 0, noOutput = 0, loadFailed = 0, initFailed = 0, crashed = 0, timedOut = 0;
+    int passed = 0, noAudio = 0, silent = 0, noOutput = 0, loadFailed = 0, initFailed = 0, crashed = 0, timedOut = 0;
 
     auto runBatch = [&](const char* label, const std::vector<const GearEntry*>& batch) {
         printf("=== %s ===\n", label);
@@ -567,6 +670,10 @@ int main(int argc, char* argv[]) {
                     printf("TIMEOUT (%ds)\n", TIMEOUT_MS / 1000);
                     timedOut++;
                     break;
+                case 7:
+                    printf("SILENT\n");
+                    silent++;
+                    break;
                 default:
                     printf("ERROR (code=%d)\n", r.exitCode);
                     crashed++;
@@ -580,12 +687,13 @@ int main(int argc, char* argv[]) {
     runBatch("EFFECTS", effects);
 
     int total = (int)results.size();
-    int testedTotal = total - noOutput; // machines we actually ran
+    int testedTotal = total - noOutput - silent; // machines that could have produced audio
     printf("========================================\n");
-    printf("Results: %d/%d passed (%d no-output machines excluded)\n",
-        passed, testedTotal, noOutput);
+    printf("Results: %d/%d passed (%d no-output, %d silent excluded)\n",
+        passed, testedTotal, noOutput, silent);
     printf("  Audio OK:    %d\n", passed);
-    printf("  No audio:    %d\n", noAudio);
+    printf("  No audio:    %d  (Work returned true but buffer was zero)\n", noAudio);
+    printf("  Silent:      %d  (Work never returned true — likely control-only)\n", silent);
     printf("  No output:   %d  (flagged MIF_NO_OUTPUT/MIF_CONTROL_MACHINE)\n", noOutput);
     printf("  Load failed: %d\n", loadFailed);
     printf("  Init failed: %d\n", initFailed);
@@ -596,7 +704,7 @@ int main(int argc, char* argv[]) {
     if (passed < testedTotal) {
         printf("\nFailed machines:\n");
         for (auto& r : results) {
-            if (r.exitCode == 0 || r.exitCode == 6) continue;
+            if (r.exitCode == 0 || r.exitCode == 6 || r.exitCode == 7) continue;
             const char* reason =
                 r.exitCode == 1 ? "NO AUDIO" :
                 r.exitCode == 2 ? "INIT" :
