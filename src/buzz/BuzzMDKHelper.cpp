@@ -1,10 +1,39 @@
 #include "BuzzMDKHelper.h"
+#include "common/SEHGuard.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <malloc.h>
 
 namespace BuzzVst {
+
+// File-scope types/functions used by the MDKInit worker thread. Hoisted out
+// of StubMDKSetup so the thread proc can be a named static function with an
+// explicit __stdcall (WINAPI) calling convention — clang-mingw on i686
+// won't implicitly convert a stateless lambda to LPTHREAD_START_ROUTINE.
+typedef void (__thiscall *MDKInitFn)(void*, void*);
+
+struct MDKInitParams {
+	MDKInitFn fn;
+	void* machine;
+	bool completed;
+	bool crashed;
+	DWORD exceptionCode;
+};
+
+static DWORD WINAPI MDKInitThreadProc(LPVOID p)
+{
+	auto* params = (MDKInitParams*)p;
+	BUZZ_SEH_TRY {
+		params->fn(params->machine, nullptr);
+		params->completed = true;
+	}
+	BUZZ_SEH_EXCEPT {
+		params->crashed = true;
+		params->exceptionCode = BUZZ_SEH_CODE();
+	}
+	return 0;
+}
 
 // MDK stub object layout (0x2C = 44 bytes, matching real CMDKImplementation
 // from FUN_00424f10 in the real Buzz host):
@@ -62,7 +91,6 @@ static void __fastcall StubMDKSetup(void* thisPtr, void* /*edx*/, int /*mode*/) 
 	// All MDK machines share the same CMDKMachineInterface vtable layout,
 	// so index 23 is consistent. But some machines' MDKInit may hang
 	// (e.g., waiting for a message loop). We use a thread with timeout.
-	typedef void (__thiscall *MDKInitFn)(void*, void*);
 	void** mVtable = *(void***)machine;
 	MDKInitFn mdkInit = (MDKInitFn)mVtable[23];
 
@@ -72,27 +100,9 @@ static void __fastcall StubMDKSetup(void* thisPtr, void* /*edx*/, int /*mode*/) 
 
 	// Run MDKInit on a separate thread with a 3-second timeout.
 	// Some machines hang here (e.g., BTDSys Pulsar).
-	struct MDKInitParams {
-		MDKInitFn fn;
-		void* machine;
-		bool completed;
-		bool crashed;
-		DWORD exceptionCode;
-	};
 	MDKInitParams initParams = { mdkInit, machine, false, false, 0 };
 
-	HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID p) -> DWORD {
-		auto* params = (MDKInitParams*)p;
-		__try {
-			params->fn(params->machine, nullptr);
-			params->completed = true;
-		}
-		__except(EXCEPTION_EXECUTE_HANDLER) {
-			params->crashed = true;
-			params->exceptionCode = GetExceptionCode();
-		}
-		return 0;
-	}, &initParams, 0, nullptr);
+	HANDLE hThread = CreateThread(nullptr, 0, &MDKInitThreadProc, &initParams, 0, nullptr);
 
 	if (hThread) {
 		DWORD waitResult = WaitForSingleObject(hThread, 3000);
@@ -109,13 +119,13 @@ static void __fastcall StubMDKSetup(void* thisPtr, void* /*edx*/, int /*mode*/) 
 		CloseHandle(hThread);
 	} else {
 		// Fallback: call directly with SEH
-		__try {
+		BUZZ_SEH_TRY {
 			mdkInit(machine, nullptr);
 			OutputDebugStringA("[BuzzBridgeHost32] MDKInit returned OK (direct call)\n");
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER) {
+		BUZZ_SEH_EXCEPT {
 			snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] MDKInit CRASHED (exception 0x%08lX)\n",
-				GetExceptionCode());
+				BUZZ_SEH_CODE());
 			OutputDebugStringA(dbg);
 		}
 	}

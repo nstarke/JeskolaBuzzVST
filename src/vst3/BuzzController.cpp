@@ -2,6 +2,7 @@
 #include "BuzzController.h"
 #include "BuzzPluginView.h"
 #include "ParameterMapping.h"
+#include "../buzz/BuzzPresetLoader.h"
 #include "../common/SEHGuard.h"
 
 #include "pluginterfaces/base/ibstream.h"
@@ -75,19 +76,70 @@ void BuzzController::initPreallocatedParams()
 	}
 }
 
-// Check if the default gear directory (%USERPROFILE%\Buzz\Gear) exists.
-// Returns the path if it exists, empty string otherwise.
+// Look up an environment variable, returning empty string if unset or oversized.
+static std::string GetEnvStr(const char* name)
+{
+	char buf[MAX_PATH] = {};
+	DWORD len = GetEnvironmentVariableA(name, buf, MAX_PATH);
+	if (len == 0 || len >= MAX_PATH) return "";
+	return std::string(buf);
+}
+
+// Returns true if the given path exists and is a directory.
+static bool IsDir(const std::string& path)
+{
+	if (path.empty()) return false;
+	DWORD attrs = GetFileAttributesA(path.c_str());
+	return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+// Detect the Buzz Gear directory by checking a series of likely locations.
+// Returns the first existing path found, or empty string if none match.
+//
+// Search order:
+//   1. $BUZZVST_GEAR_DIR (explicit override — works on Windows and WINE)
+//   2. %ProgramFiles(x86)%\Jeskola Buzz\Gear  (Jeskola installer default)
+//   3. %ProgramFiles%\Jeskola Buzz\Gear
+//   4. %USERPROFILE%\Buzz\Gear                (legacy/portable install)
+//   5. %USERPROFILE%\Jeskola Buzz\Gear
+//
+// Under WINE, %ProgramFiles(x86)% and %USERPROFILE% resolve via the WINE
+// prefix, so a WINE-installed Jeskola Buzz is found automatically. Linux
+// users who keep Buzz outside the WINE prefix can set BUZZVST_GEAR_DIR to
+// any Z:\... path they like.
 static std::string detectDefaultGearDir()
 {
-	char profileDir[MAX_PATH] = {};
-	DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-	if (len == 0 || len >= MAX_PATH) return "";
+	std::string envDir = GetEnvStr("BUZZVST_GEAR_DIR");
+	if (IsDir(envDir)) return envDir;
 
-	std::string gearPath = std::string(profileDir) + "\\Buzz\\Gear";
+	const char* pfVars[] = { "ProgramFiles(x86)", "ProgramFiles" };
+	for (const char* v : pfVars) {
+		std::string pf = GetEnvStr(v);
+		if (pf.empty()) continue;
+		std::string p = pf + "\\Jeskola Buzz\\Gear";
+		if (IsDir(p)) return p;
+	}
 
-	DWORD attrs = GetFileAttributesA(gearPath.c_str());
-	if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
-		return gearPath;
+	std::string profile = GetEnvStr("USERPROFILE");
+	if (!profile.empty()) {
+		const char* suffixes[] = { "\\Buzz\\Gear", "\\Jeskola Buzz\\Gear" };
+		for (const char* s : suffixes) {
+			std::string p = profile + s;
+			if (IsDir(p)) return p;
+		}
+	}
+
+	// WINE fallback: when running under WINE, $USER is propagated from the
+	// Linux environment, and Z:\ maps to the Linux root filesystem. Check
+	// Z:\home\$USER\Buzz\Gear so the Linux install.sh's default extraction
+	// location (/home/<user>/Buzz/Gear) is auto-detected with no env var.
+	// Harmless on native Windows since $USER is typically unset there and
+	// Z:\home\... rarely exists.
+	std::string linuxUser = GetEnvStr("USER");
+	if (!linuxUser.empty()) {
+		std::string zPath = "Z:\\home\\" + linuxUser + "\\Buzz\\Gear";
+		if (IsDir(zPath)) return zPath;
+	}
 
 	return "";
 }
@@ -1281,37 +1333,36 @@ void BuzzController::wireParamCallbacks(BuzzPluginView* view)
 		if (!prsPath.empty() && presetLoader.Save(prsPath)) {
 			OutputDebugStringA("[BuzzBridge] Preset saved OK\n");
 
-			// Backup to OneDrive if it exists, preserving Gear directory structure
-			char profileDir[MAX_PATH] = {};
-			DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-			if (len > 0 && len < MAX_PATH) {
-				std::string oneDrive = std::string(profileDir) + "\\OneDrive";
-				DWORD attr = GetFileAttributesA(oneDrive.c_str());
-				if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-					// Extract relative path from Gear root (look for \Gear\ in the path)
-					std::string lowerPrs = prsPath;
-					for (auto& c : lowerPrs) c = (char)tolower((unsigned char)c);
-					size_t gearPos = lowerPrs.find("\\gear\\");
-					if (gearPos == std::string::npos) gearPos = lowerPrs.find("/gear/");
-					if (gearPos != std::string::npos) {
-						std::string relPath = prsPath.substr(gearPos); // e.g. \Gear\generators\Machine.prs
-						std::string backupPath = oneDrive + "\\BuzzVST" + relPath;
+			// Mirror the preset to the backup root (BUZZVST_BACKUP_DIR or
+			// %USERPROFILE%\OneDrive\BuzzVST on Windows), preserving the
+			// Gear directory structure. Under WINE without either of those
+			// configured, ResolveBackupRoot() returns empty and this block
+			// is skipped entirely.
+			std::string backupRoot = BuzzPresetLoader::ResolveBackupRoot();
+			if (!backupRoot.empty()) {
+				// Extract relative path from Gear root (look for \Gear\ in the path)
+				std::string lowerPrs = prsPath;
+				for (auto& c : lowerPrs) c = (char)tolower((unsigned char)c);
+				size_t gearPos = lowerPrs.find("\\gear\\");
+				if (gearPos == std::string::npos) gearPos = lowerPrs.find("/gear/");
+				if (gearPos != std::string::npos) {
+					std::string relPath = prsPath.substr(gearPos); // e.g. \Gear\generators\Machine.prs
+					std::string backupPath = backupRoot + relPath;
 
-						// Create directory tree
-						std::string backupDir = backupPath;
-						size_t lastSlash = backupDir.find_last_of("\\/");
-						if (lastSlash != std::string::npos) {
-							backupDir = backupDir.substr(0, lastSlash);
-							CreateDirectoryA((oneDrive + "\\BuzzVST").c_str(), nullptr);
-							CreateDirectoryA((oneDrive + "\\BuzzVST\\Gear").c_str(), nullptr);
-							CreateDirectoryA(backupDir.c_str(), nullptr);
-						}
+					// Create directory tree
+					std::string backupDir = backupPath;
+					size_t lastSlash = backupDir.find_last_of("\\/");
+					if (lastSlash != std::string::npos) {
+						backupDir = backupDir.substr(0, lastSlash);
+						CreateDirectoryA(backupRoot.c_str(), nullptr);
+						CreateDirectoryA((backupRoot + "\\Gear").c_str(), nullptr);
+						CreateDirectoryA(backupDir.c_str(), nullptr);
+					}
 
-						if (presetLoader.Save(backupPath)) {
-							char dbg[512];
-							snprintf(dbg, sizeof(dbg), "[BuzzBridge] Preset backup saved to: %s\n", backupPath.c_str());
-							OutputDebugStringA(dbg);
-						}
+					if (presetLoader.Save(backupPath)) {
+						char dbg[512];
+						snprintf(dbg, sizeof(dbg), "[BuzzBridge] Preset backup saved to: %s\n", backupPath.c_str());
+						OutputDebugStringA(dbg);
 					}
 				}
 			}

@@ -3,4 +3,7 @@ ref
 build
 build32
 build64
+build-wine
 dist
+dist-wine
+third_party

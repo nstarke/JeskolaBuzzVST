@@ -1,9 +1,10 @@
 @echo off
 setlocal
+pushd "%~dp0.."
 
 REM Recursively decompile every Buzz machine DLL under %USERPROFILE%\Buzz
-REM into C:\Users\nick\source\repos\JeskolaBuzzVst\ref\decompiled using
-REM Ghidra's headless analyzer and the HarusHeadless post-script.
+REM into <repo>\ref\decompiled using Ghidra's headless analyzer and the
+REM HarusHeadless post-script.
 
 if "%GHIDRA_INSTALL_DIR%"=="" (
     echo ERROR: GHIDRA_INSTALL_DIR is not set in this shell.
@@ -13,6 +14,7 @@ if "%GHIDRA_INSTALL_DIR%"=="" (
     echo in the current session:
     echo     PowerShell:  $env:GHIDRA_INSTALL_DIR = "C:\path\to\ghidra"
     echo     cmd.exe:     set GHIDRA_INSTALL_DIR=C:\path\to\ghidra
+    popd
     exit /b 1
 )
 
@@ -20,16 +22,18 @@ set "ANALYZE=%GHIDRA_INSTALL_DIR%\support\analyzeHeadless.bat"
 if not exist "%ANALYZE%" (
     echo ERROR: analyzeHeadless.bat not found at:
     echo     %ANALYZE%
+    popd
     exit /b 1
 )
 
 set "BUZZ_DIR=%USERPROFILE%\Buzz"
 if not exist "%BUZZ_DIR%" (
     echo ERROR: Buzz directory not found: %BUZZ_DIR%
+    popd
     exit /b 1
 )
 
-set "OUT_DIR=C:\Users\nick\source\repos\JeskolaBuzzVst\ref\decompiled"
+set "OUT_DIR=%CD%\ref\decompiled"
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
 REM Ghidra needs a project location + project name. Use a scratch dir under
@@ -52,4 +56,5 @@ call "%ANALYZE%" "%PROJECT_DIR%" "%PROJECT_NAME%" ^
     -postScript HarusHeadless.java "%OUT_DIR%" ^
     -overwrite
 
+popd
 endlocal
