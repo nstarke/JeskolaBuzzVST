@@ -88,16 +88,16 @@ static void HandleInitMachine() {
 	}
 
 	bool initOk = false;
-	__try {
+	BUZZ_SEH_TRY {
 		OutputDebugStringA("[BuzzBridgeHost32] Step 2: calling g_loader.InitMachine()\n");
 		initOk = g_loader.InitMachine();
 		char dbg[64];
 		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] Step 3: InitMachine returned %d\n", (int)initOk);
 		OutputDebugStringA(dbg);
-	} __except(EXCEPTION_EXECUTE_HANDLER) {
+	} BUZZ_SEH_EXCEPT {
 		char dbg[128];
 		snprintf(dbg, sizeof(dbg), "[BuzzBridgeHost32] InitMachine CRASHED with exception 0x%08lX\n",
-			GetExceptionCode());
+			BUZZ_SEH_CODE());
 		OutputDebugStringA(dbg);
 	}
 
@@ -530,10 +530,10 @@ static void HandleDescribeValue() {
 	if (desc && desc[0]) {
 		// Safely measure length — machine may return a bad pointer
 		uint32_t len = 0;
-		__try {
+		BUZZ_SEH_TRY {
 			len = (uint32_t)strnlen(desc, 255);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER) {
+		BUZZ_SEH_EXCEPT {
 			len = 0;
 		}
 		if (len > 0) {

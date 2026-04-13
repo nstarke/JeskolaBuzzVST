@@ -69,3 +69,38 @@ jobs:
           name: BuzzBridge-vst3
           path: dist/BuzzBridge.vst3/
           if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build curl tar xz-utils
+
+      - name: Cache llvm-mingw toolchain
+        id: cache-llvm-mingw
+        uses: actions/cache@v4
+        with:
+          path: third_party/llvm-mingw
+          key: llvm-mingw-20250709-ubuntu-22.04
+
+      - name: Cross-build BuzzBridge for WINE
+        run: ./scripts/build-linux-wine.sh
+
+      - name: Package Linux tarball
+        run: ./scripts/package-linux.sh "ci-${{ github.sha }}"
+
+      - name: Upload Linux tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuzzBridge-Linux
+          path: dist-wine/BuzzBridge-Linux-*.tar.gz
+          if-no-files-found: error

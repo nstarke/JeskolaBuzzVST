@@ -50,7 +50,7 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 
 	// Spot-check ALL parameter pointers under SEH
 	if (totalParams > 0) {
-		__try {
+		BUZZ_SEH_TRY {
 			for (int i = 0; i < totalParams; i++) {
 				if (!info->Parameters[i]) return false;
 				volatile int t = info->Parameters[i]->Type;
@@ -58,7 +58,7 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 				(void)t; (void)name;
 			}
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER) {
+		BUZZ_SEH_EXCEPT {
 			return false;
 		}
 	}
@@ -74,14 +74,14 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 		return false;
 	if (info->numAttributes > 0) {
 		if (!info->Attributes) return false;
-		__try {
+		BUZZ_SEH_TRY {
 			for (int i = 0; i < info->numAttributes; i++) {
 				if (!info->Attributes[i]) return false;
 				volatile int d = info->Attributes[i]->DefValue;
 				(void)d;
 			}
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER) {
+		BUZZ_SEH_EXCEPT {
 			return false;
 		}
 	}

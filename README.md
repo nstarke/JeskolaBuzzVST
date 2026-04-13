@@ -39,7 +39,7 @@ git submodule update --init --recursive
 ### Quick build (both architectures)
 
 ```bat
-build.bat
+scripts\build.bat
 ```
 
 This builds everything in one step: 32-bit plugin, 32-bit bridge host, runs tests, builds the 64-bit plugin, and assembles the combined bundle in `dist/`.
@@ -90,7 +90,7 @@ The installer is built with [Inno Setup](https://jrsoftware.org/issetup.php). In
 choco install innosetup --yes
 ```
 
-Then, after a successful `build.bat` (which assembles the `dist/` folder), build the installer:
+Then, after a successful `scripts\build.bat` (which assembles the `dist/` folder), build the installer:
 
 ```bat
 :: From Command Prompt (cmd):
@@ -100,7 +100,7 @@ Then, after a successful `build.bat` (which assembles the `dist/` folder), build
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=v1.0.0" installer\BuzzBridge.iss
 ```
 
-This produces `dist\BuzzBridge-Setup-v1.0.0.exe`. The `build.bat` script will also build the installer automatically if Inno Setup is detected.
+This produces `dist\BuzzBridge-Setup-v1.0.0.exe`. The `scripts\build.bat` script will also build the installer automatically if Inno Setup is detected.
 
 The `/DMyAppVersion=` flag sets the version shown in the installer and the output filename. Use any string you like for local builds.
 
@@ -121,6 +121,96 @@ C:\Program Files\Common Files\VST3\
 If you are using a **64-bit DAW** (most modern DAWs), make sure `BuzzBridgeHost32.exe` is in the same folder as the 64-bit `BuzzBridge.vst3` DLL (`Contents/x86_64-win/`). The 64-bit plugin looks for it there at runtime.
 
 If you only need the **32-bit plugin** (for a 32-bit DAW), you only need the `x86-win/` folder and can skip the 64-bit build entirely.
+
+## Linux (WINE + yabridge)
+
+BuzzBridge can be cross-compiled from Linux and run in Linux DAWs (Bitwig, Reaper-native, Ardour, etc.) via [yabridge](https://github.com/robbert-vdh/yabridge), which transparently bridges Windows VST3 plugins to native Linux VST3 hosts over WINE.
+
+### How it works
+
+Buzz machine DLLs are 32-bit Win32 code, so any Linux host needs a Windows execution environment to load them. The cross-compiled BuzzBridge is itself a 32-bit Windows VST3 plugin. yabridge wraps it as a native Linux VST3 that your DAW can load, and the 32-bit Buzz DLLs run inside the yabridge WINE host process. If a buggy Buzz machine crashes, yabridge isolates the failure from the Linux DAW.
+
+You do not need the 64-bit bridge host (`BuzzBridgeHost32.exe`) on Linux — yabridge already handles the 64↔32 boundary at the VST3 layer, so only the 32-bit plugin is built.
+
+### Requirements
+
+- Linux (or WSL2) with `bash`, `cmake` ≥ 3.25, `ninja`, `git`, `curl`, `tar`
+- [WINE](https://www.winehq.org/) (any recent version)
+- [yabridge](https://github.com/robbert-vdh/yabridge) + `yabridgectl` (for installing into DAWs)
+- A Linux-native VST3 host (Bitwig Studio, Reaper, Ardour, Carla, etc.)
+
+`llvm-mingw` (the clang-based mingw-w64 toolchain used for cross-compilation) is downloaded automatically into `third_party/llvm-mingw/` on first run.
+
+### Building
+
+From the repo root:
+
+```bash
+./scripts/build-linux-wine.sh
+```
+
+On first run this will:
+
+1. Download llvm-mingw (≈400 MB) into `third_party/llvm-mingw/`.
+2. Initialize the VST3 SDK submodule if needed.
+3. Apply an idempotent patch to `sdk/public.sdk/source/vst/utility/alignedalloc.h` so it uses mingw's `_aligned_malloc` rather than the unavailable `std::aligned_alloc`.
+4. Configure and build the 32-bit `BuzzBridge` target with clang targeting `i686-w64-mingw32`.
+5. Copy the resulting flat `BuzzBridge.vst3` DLL into `dist-wine/`.
+
+The output is a single file at `dist-wine/BuzzBridge.vst3`. yabridge accepts flat-file VST3 layout, so no `Contents/x86-win/` bundle directory is needed.
+
+### Installing into yabridge
+
+```bash
+./scripts/build-linux-wine.sh --install
+```
+
+This runs the build and then invokes `yabridgectl add dist-wine` followed by `yabridgectl sync`, which generates the native Linux VST3 shim next to the Windows plugin. Rescan plugins in your DAW afterwards — `Buzz Generator Bridge` and `Buzz Effect Bridge` should appear.
+
+To install manually:
+
+```bash
+yabridgectl add "$(pwd)/dist-wine"
+yabridgectl sync
+```
+
+Or copy `dist-wine/BuzzBridge.vst3` into any directory `yabridgectl` is already watching (e.g. `~/.vst3/`, `~/.wine/drive_c/Program Files/Common Files/VST3/`).
+
+### Pointing at your Buzz machines
+
+On startup, BuzzBridge auto-detects a Buzz Gear directory by checking the following locations in order:
+
+1. `$BUZZVST_GEAR_DIR` (explicit override — any Windows or WINE-mapped path)
+2. `%ProgramFiles(x86)%\Jeskola Buzz\Gear` (Jeskola installer default)
+3. `%ProgramFiles%\Jeskola Buzz\Gear`
+4. `%USERPROFILE%\Buzz\Gear` (legacy/portable install)
+5. `%USERPROFILE%\Jeskola Buzz\Gear`
+
+Under WINE, `%ProgramFiles(x86)%` and `%USERPROFILE%` resolve through the WINE prefix. If you install Jeskola Buzz via its own installer into WINE, paths #2 and #4 both work with no extra configuration. If your Buzz machines live somewhere else (e.g. on your Linux home directory, accessed via WINE's `Z:\` drive mapping), set the env var before launching your DAW:
+
+```bash
+export BUZZVST_GEAR_DIR='Z:\home\alice\buzz-machines'
+# then start your DAW
+```
+
+You can also override at any time from the plugin UI's "Load Buzz Machine..." browser, which takes any path WINE can see.
+
+### Preset backup directory (optional)
+
+BuzzBridge can mirror saved presets to a secondary backup directory. On Windows this defaults to `%USERPROFILE%\OneDrive\BuzzVST\` if OneDrive is present. To configure a custom location (required on Linux, where OneDrive doesn't exist under WINE), set:
+
+```bash
+export BUZZVST_BACKUP_DIR='Z:\home\alice\buzz-preset-backups'
+```
+
+If neither `BUZZVST_BACKUP_DIR` nor `%USERPROFILE%\OneDrive` resolves to an existing directory, preset backups are silently skipped and the primary `.prs` file beside each machine DLL is the only copy.
+
+### Limitations
+
+- **No structured exception handling.** Under MSVC, BuzzBridge wraps every call into machine code in `__try`/`__except` so a buggy machine can't crash the host process. Clang's i686 SEH implementation has known bugs with templated lambdas, so the Linux build falls back to passthrough calls. A crashing Buzz machine will kill the yabridge-hosted plugin process — yabridge isolates this from your DAW, but the plugin instance will need to be reloaded.
+- **No unit tests** are built or run on Linux. The test suite still requires MSVC and is wired into the Windows `scripts/build.bat` path.
+- **Tested machines only.** The same 40ish Buzz machines that are broken on Windows (see `machine-support.txt`) are broken under WINE as well. WINE introduces no additional known incompatibilities but has not been audited against the full machine set.
+- **GUI chrome.** The "Load Buzz Machine..." file dialog uses Win32 `GetOpenFileName` and renders in WINE's default style rather than your Linux desktop theme. Functional but not native-looking.
 
 ## Running Tests
 

@@ -155,11 +155,40 @@ std::string BuzzPresetLoader::PrsPathForDll(const std::string& dllPath) {
     return dllPath.substr(0, dotPos) + ".prs";
 }
 
-// Build the OneDrive preset path for a DLL.
-// Given a DLL like "C:\Users\X\Buzz\Gear\generators\Machine.dll", extracts
-// the relative "\Gear\generators\Machine.prs" portion and maps it to
-// "%USERPROFILE%\OneDrive\BuzzVST\Gear\generators\Machine.prs".
-static std::string oneDrivePrsPath(const std::string& dllPath) {
+static bool DirExists(const std::string& path) {
+    if (path.empty()) return false;
+    DWORD attrs = GetFileAttributesA(path.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static std::string GetEnv(const char* name) {
+    char buf[MAX_PATH] = {};
+    DWORD len = GetEnvironmentVariableA(name, buf, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) return "";
+    return std::string(buf);
+}
+
+std::string BuzzPresetLoader::ResolveBackupRoot() {
+    // Explicit override (works on any platform, including WINE).
+    std::string envDir = GetEnv("BUZZVST_BACKUP_DIR");
+    if (DirExists(envDir)) return envDir;
+
+    // Legacy fallback: %USERPROFILE%\OneDrive\BuzzVST (author's personal
+    // backup location on Windows). Under WINE OneDrive typically isn't
+    // present, so this returns empty and backups are silently skipped.
+    std::string profile = GetEnv("USERPROFILE");
+    if (profile.empty()) return "";
+    std::string oneDrive = profile + "\\OneDrive";
+    if (!DirExists(oneDrive)) return "";
+    return oneDrive + "\\BuzzVST";
+}
+
+// Build the backup .prs path for a DLL. Given a DLL like
+// "C:\Users\X\Buzz\Gear\generators\Machine.dll", extracts the relative
+// "\Gear\generators\Machine.prs" portion and maps it under the backup root
+// returned by ResolveBackupRoot(). Returns empty string if backups are not
+// configured or the DLL isn't under a Gear directory.
+static std::string backupPrsPath(const std::string& dllPath) {
     std::string prs = BuzzPresetLoader::PrsPathForDll(dllPath);
     if (prs.empty()) return "";
 
@@ -170,17 +199,16 @@ static std::string oneDrivePrsPath(const std::string& dllPath) {
     if (gearPos == std::string::npos) gearPos = lower.find("/gear/");
     if (gearPos == std::string::npos) return "";
 
-    char profileDir[MAX_PATH] = {};
-    DWORD len = GetEnvironmentVariableA("USERPROFILE", profileDir, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return "";
+    std::string backupRoot = BuzzPresetLoader::ResolveBackupRoot();
+    if (backupRoot.empty()) return "";
 
     std::string relPath = prs.substr(gearPos); // e.g. \Gear\generators\Machine.prs
-    return std::string(profileDir) + "\\OneDrive\\BuzzVST" + relPath;
+    return backupRoot + relPath;
 }
 
 std::string BuzzPresetLoader::FindPrsForDll(const std::string& dllPath) {
-    // 1. Try OneDrive Gear directory first
-    std::string odPath = oneDrivePrsPath(dllPath);
+    // 1. Try backup location first (BUZZVST_BACKUP_DIR / OneDrive mirror)
+    std::string odPath = backupPrsPath(dllPath);
     if (!odPath.empty()) {
         std::ifstream f(odPath);
         if (f.good()) return odPath;

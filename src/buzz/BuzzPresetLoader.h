@@ -35,6 +35,13 @@ public:
     // Find existing .prs file (returns empty if not found)
     static std::string FindPrsForDll(const std::string& dllPath);
 
+    // Resolve the backup root directory for preset mirrors, or empty string
+    // if backups are not configured. Checks BUZZVST_BACKUP_DIR env override
+    // first, then falls back to %USERPROFILE%\OneDrive\BuzzVST if OneDrive
+    // is present. Under WINE without OneDrive and without the env var set,
+    // returns empty (backups are silently disabled).
+    static std::string ResolveBackupRoot();
+
     void SetMachineName(const std::string& name) { machineName = name; }
     const std::string& GetMachineName() const { return machineName; }
     const std::vector<BuzzPreset>& GetPresets() const { return presets; }

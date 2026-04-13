@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -57,8 +57,68 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ github.ref_name }} installer\BuzzBridge.iss
 
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuzzBridge-Windows-Installer
+          path: dist/BuzzBridge-Setup-${{ github.ref_name }}.exe
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build curl tar xz-utils
+
+      - name: Cache llvm-mingw toolchain
+        uses: actions/cache@v4
+        with:
+          path: third_party/llvm-mingw
+          key: llvm-mingw-20250709-ubuntu-22.04
+
+      - name: Cross-build BuzzBridge for WINE
+        run: ./scripts/build-linux-wine.sh
+
+      - name: Package Linux tarball
+        run: ./scripts/package-linux.sh "${{ github.ref_name }}"
+
+      - name: Upload Linux tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuzzBridge-Linux-Tarball
+          path: dist-wine/BuzzBridge-Linux-${{ github.ref_name }}.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: BuzzBridge-Windows-Installer
+          path: release-artifacts
+
+      - name: Download Linux tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: BuzzBridge-Linux-Tarball
+          path: release-artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/BuzzBridge-Setup-${{ github.ref_name }}.exe
+          files: |
+            release-artifacts/BuzzBridge-Setup-${{ github.ref_name }}.exe
+            release-artifacts/BuzzBridge-Linux-${{ github.ref_name }}.tar.gz
           generate_release_notes: true

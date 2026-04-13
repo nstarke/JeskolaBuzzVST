@@ -1,5 +1,6 @@
 @echo off
 setlocal
+pushd "%~dp0.."
 
 :: Find cmake from VS2022
 set CMAKE="%ProgramFiles%\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
@@ -103,9 +104,11 @@ echo ============================================
 goto :end
 
 :error
+popd
 echo.
 echo BUILD FAILED
 exit /b 1
 
 :end
+popd
 endlocal

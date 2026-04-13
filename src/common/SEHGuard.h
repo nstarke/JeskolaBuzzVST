@@ -4,15 +4,31 @@
 // Buzz machines are old 32-bit DLLs that may have bugs. We wrap all calls
 // into machine code with SEH to prevent crashes from taking down the host.
 //
-// IMPORTANT: Requires /EHa compiler flag (SEH exceptions with C++ EH).
-// The lambda passed to SEH_Call must not have C++ objects with destructors
-// on its stack if compiled without /EHa.
+// MSVC build: real SEH. Requires /EHa (SEH exceptions with C++ EH).
+//
+// clang-mingw cross build (for WINE+yabridge): clang's i686 SEH has
+// assembler-label bugs with templated lambdas (L__ehtable$...) and mingw
+// headers don't tolerate -fms-extensions globally. On non-MSVC the helpers
+// become passthroughs. Crash protection is lost, but under WINE+yabridge
+// a machine crash only kills the bridged VST host process — yabridge
+// isolates the Linux DAW from it.
 
 #include <windows.h>
 
+#if defined(_MSC_VER)
+	#define BUZZ_SEH_TRY     __try
+	#define BUZZ_SEH_EXCEPT  __except(EXCEPTION_EXECUTE_HANDLER)
+	#define BUZZ_SEH_CODE()  GetExceptionCode()
+#else
+	#define BUZZ_SEH_TRY     if (true)
+	#define BUZZ_SEH_EXCEPT  else if (false)
+	#define BUZZ_SEH_CODE()  ((DWORD)0)
+#endif
+
 namespace BuzzVst {
 
-// Execute a callable with SEH protection. Returns true if no exception occurred.
+#if defined(_MSC_VER)
+
 template<typename Func>
 inline bool SEH_Call(Func fn)
 {
@@ -26,8 +42,6 @@ inline bool SEH_Call(Func fn)
 	}
 }
 
-// Execute a callable with SEH protection, returning a value.
-// Returns defaultVal if an exception occurs.
 template<typename T, typename Func>
 inline T SEH_CallRet(Func fn, T defaultVal)
 {
@@ -39,5 +53,15 @@ inline T SEH_CallRet(Func fn, T defaultVal)
 		return defaultVal;
 	}
 }
+
+#else // non-MSVC: passthrough (see header comment)
+
+template<typename Func>
+inline bool SEH_Call(Func fn) { fn(); return true; }
+
+template<typename T, typename Func>
+inline T SEH_CallRet(Func fn, T defaultVal) { return fn(); }
+
+#endif
 
 } // namespace BuzzVst
