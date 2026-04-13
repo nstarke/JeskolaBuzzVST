@@ -42,6 +42,20 @@ cp "${SCRIPT_DIR}/install-linux.sh"        "${STAGING}/install.sh"
 cp "${SCRIPT_DIR}/uninstall-linux.sh"      "${STAGING}/uninstall.sh"
 chmod +x "${STAGING}/install.sh" "${STAGING}/uninstall.sh"
 
+# Substitute the machine database release-asset URL into install.sh. Only
+# valid for tagged releases (version starts with "v"); dev/ci tarballs get
+# an empty URL so install.sh shows a helpful manual-download message.
+MDB_URL=""
+if [[ "${VERSION}" =~ ^v[0-9] ]]; then
+    MDB_URL="https://github.com/nstarke/JeskolaBuzzVST/releases/download/${VERSION}/mdb_machines.zip"
+fi
+# macOS sed needs the backup arg; GNU sed does not. Handle both.
+if sed --version >/dev/null 2>&1; then
+    sed -i "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/install.sh"
+else
+    sed -i '' "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/install.sh"
+fi
+
 cat > "${STAGING}/README.txt" <<EOF
 BuzzBridge ${VERSION} — Linux (WINE + yabridge) build
 =====================================================

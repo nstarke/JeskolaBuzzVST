@@ -64,6 +64,13 @@ jobs:
           path: dist/BuzzBridge-Setup-${{ github.ref_name }}.exe
           if-no-files-found: error
 
+      - name: Upload machine database
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuzzBridge-Machine-Database
+          path: data/mdb_machines.zip
+          if-no-files-found: error
+
   build-linux:
     runs-on: ubuntu-latest
 
@@ -115,10 +122,17 @@ jobs:
           name: BuzzBridge-Linux-Tarball
           path: release-artifacts
 
+      - name: Download machine database
+        uses: actions/download-artifact@v4
+        with:
+          name: BuzzBridge-Machine-Database
+          path: release-artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release-artifacts/BuzzBridge-Setup-${{ github.ref_name }}.exe
             release-artifacts/BuzzBridge-Linux-${{ github.ref_name }}.tar.gz
+            release-artifacts/mdb_machines.zip
           generate_release_notes: true

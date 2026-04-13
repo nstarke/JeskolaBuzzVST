@@ -176,6 +176,33 @@ yabridgectl sync
 
 Or copy `dist-wine/BuzzBridge.vst3` into any directory `yabridgectl` is already watching (e.g. `~/.vst3/`, `~/.wine/drive_c/Program Files/Common Files/VST3/`).
 
+### Installing from a release tarball
+
+Download `BuzzBridge-Linux-vX.Y.Z.tar.gz` from the [Releases](https://github.com/nstarke/JeskolaBuzzVST/releases) page, extract, and run the bundled installer:
+
+```bash
+tar xf BuzzBridge-Linux-vX.Y.Z.tar.gz
+cd BuzzBridge-Linux-vX.Y.Z
+./install.sh
+```
+
+The installer copies `BuzzBridge.vst3` to `~/.local/share/BuzzBridge/`, registers that directory with `yabridgectl`, and runs `yabridgectl sync` to generate the native Linux VST3 shim. It then prompts you to download the Buzz machine database (~30 MB, 726 machines) and extract it to `$HOME/Buzz/Gear`.
+
+Options:
+
+```bash
+./install.sh --with-machines    # install machine DB without prompting
+./install.sh --no-machines      # skip machine DB without prompting
+```
+
+Override the install location with `BUZZVST_INSTALL_DIR=/custom/path ./install.sh`.
+
+To uninstall:
+
+```bash
+./uninstall.sh
+```
+
 ### Pointing at your Buzz machines
 
 On startup, BuzzBridge auto-detects a Buzz Gear directory by checking the following locations in order:
@@ -185,6 +212,7 @@ On startup, BuzzBridge auto-detects a Buzz Gear directory by checking the follow
 3. `%ProgramFiles%\Jeskola Buzz\Gear`
 4. `%USERPROFILE%\Buzz\Gear` (legacy/portable install)
 5. `%USERPROFILE%\Jeskola Buzz\Gear`
+6. `Z:\home\$USER\Buzz\Gear` (WINE fallback — matches the Linux `install.sh` default)
 
 Under WINE, `%ProgramFiles(x86)%` and `%USERPROFILE%` resolve through the WINE prefix. If you install Jeskola Buzz via its own installer into WINE, paths #2 and #4 both work with no extra configuration. If your Buzz machines live somewhere else (e.g. on your Linux home directory, accessed via WINE's `Z:\` drive mapping), set the env var before launching your DAW:
 

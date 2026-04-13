@@ -129,6 +129,18 @@ static std::string detectDefaultGearDir()
 		}
 	}
 
+	// WINE fallback: when running under WINE, $USER is propagated from the
+	// Linux environment, and Z:\ maps to the Linux root filesystem. Check
+	// Z:\home\$USER\Buzz\Gear so the Linux install.sh's default extraction
+	// location (/home/<user>/Buzz/Gear) is auto-detected with no env var.
+	// Harmless on native Windows since $USER is typically unset there and
+	// Z:\home\... rarely exists.
+	std::string linuxUser = GetEnvStr("USER");
+	if (!linuxUser.empty()) {
+		std::string zPath = "Z:\\home\\" + linuxUser + "\\Buzz\\Gear";
+		if (IsDir(zPath)) return zPath;
+	}
+
 	return "";
 }
 
