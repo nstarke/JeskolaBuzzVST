@@ -289,7 +289,13 @@ void BuzzController::scanGearDirectory(const std::string& path)
 
 	GearScanner scanner;
 	if (scanner.Scan(path)) {
-		scannedMachines = scanner.GetEntries();
+		// Filter control/no-output helpers (MIDI out, positional-audio listeners,
+		// transport sync hacks). These declare MIF_NO_OUTPUT / MIF_CONTROL_MACHINE
+		// and produce no audio by design — they shouldn't appear in the gear list.
+		for (auto& e : scanner.GetEntries()) {
+			if (e.flags & (MIF_NO_OUTPUT | MIF_CONTROL_MACHINE)) continue;
+			scannedMachines.push_back(e);
+		}
 	}
 }
 
@@ -308,7 +314,10 @@ void BuzzController::startBackgroundScan(const std::string& dir)
 		GearScanner scanner;
 		std::vector<GearEntry> results;
 		if (scanner.Scan(dir)) {
-			results = scanner.GetEntries();
+			for (auto& e : scanner.GetEntries()) {
+				if (e.flags & (MIF_NO_OUTPUT | MIF_CONTROL_MACHINE)) continue;
+				results.push_back(e);
+			}
 		}
 
 		{

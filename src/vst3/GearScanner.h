@@ -10,6 +10,7 @@ struct GearEntry {
 	std::string dllPath;      // Full absolute path to the DLL
 	std::string category;     // Relative subdirectory from gear root (e.g. "Generators")
 	int machineType;          // MT_GENERATOR or MT_EFFECT
+	int flags = 0;            // CMachineInfo::Flags (MIF_*). 0 when unread (64-bit fallback).
 };
 
 // Scans a Gear directory tree for Buzz machine DLLs.

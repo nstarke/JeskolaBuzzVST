@@ -156,6 +156,7 @@ bool GearScanner::probeOneDll(const std::string& dllPath, const std::string& cat
 			return;
 
 		entry.machineType = pInfo->Type;
+		entry.flags = pInfo->Flags;
 
 		if (pInfo->Name && pInfo->Name[0]) {
 			char nameBuf[256] = {};

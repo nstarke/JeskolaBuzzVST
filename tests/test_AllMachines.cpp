@@ -515,13 +515,29 @@ int main(int argc, char* argv[]) {
         (int)generators.size(), (int)effects.size(), skippedCount);
 
     std::vector<MachineTestResult> results;
-    int passed = 0, noAudio = 0, loadFailed = 0, initFailed = 0, crashed = 0, timedOut = 0;
+    int passed = 0, noAudio = 0, noOutput = 0, loadFailed = 0, initFailed = 0, crashed = 0, timedOut = 0;
 
     auto runBatch = [&](const char* label, const std::vector<const GearEntry*>& batch) {
         printf("=== %s ===\n", label);
         for (auto* e : batch) {
             printf("  %-40s ", e->displayName.c_str());
             fflush(stdout);
+
+            // Machines flagged MIF_NO_OUTPUT or MIF_CONTROL_MACHINE are
+            // control/helper machines (MIDI out, positional-audio listeners,
+            // transport sync hacks) that produce no audio by design — don't
+            // run them, just note them separately from real NO AUDIO failures.
+            if (e->flags & (MIF_NO_OUTPUT | MIF_CONTROL_MACHINE)) {
+                printf("NO OUTPUT\n");
+                MachineTestResult r = {};
+                r.name = e->displayName;
+                r.path = e->dllPath;
+                r.machineType = e->machineType;
+                r.exitCode = 6; // NO_OUTPUT sentinel
+                results.push_back(r);
+                noOutput++;
+                continue;
+            }
 
             MachineTestResult r = runChildTest(myExe, *e);
             results.push_back(r);
@@ -564,20 +580,23 @@ int main(int argc, char* argv[]) {
     runBatch("EFFECTS", effects);
 
     int total = (int)results.size();
+    int testedTotal = total - noOutput; // machines we actually ran
     printf("========================================\n");
-    printf("Results: %d/%d passed\n", passed, total);
+    printf("Results: %d/%d passed (%d no-output machines excluded)\n",
+        passed, testedTotal, noOutput);
     printf("  Audio OK:    %d\n", passed);
     printf("  No audio:    %d\n", noAudio);
+    printf("  No output:   %d  (flagged MIF_NO_OUTPUT/MIF_CONTROL_MACHINE)\n", noOutput);
     printf("  Load failed: %d\n", loadFailed);
     printf("  Init failed: %d\n", initFailed);
     printf("  Crashed:     %d\n", crashed);
     printf("  Timed out:   %d\n", timedOut);
     printf("========================================\n");
 
-    if (passed < total) {
+    if (passed < testedTotal) {
         printf("\nFailed machines:\n");
         for (auto& r : results) {
-            if (r.exitCode == 0) continue;
+            if (r.exitCode == 0 || r.exitCode == 6) continue;
             const char* reason =
                 r.exitCode == 1 ? "NO AUDIO" :
                 r.exitCode == 2 ? "INIT" :
@@ -589,5 +608,5 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    return (passed == total) ? 0 : 1;
+    return (passed == testedTotal) ? 0 : 1;
 }

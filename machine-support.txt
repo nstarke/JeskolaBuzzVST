@@ -2,15 +2,15 @@ Found 518 machines total
 Testing 120 generators, 372 effects (skipped 26 VST/Peer)
 
 === GENERATORS ===
-  3Dizer Listener Control                  NO AUDIO
+  3Dizer Listener Control                  NO OUTPUT
   Geonik's Expression 2                    NO AUDIO
   Zwar's Repeater                          NO AUDIO
   11-MidiCCout v1.0                        NO AUDIO
-  2ndP IGroove                             NO AUDIO
-  2ndP MGroove                             NO AUDIO
+  2ndP IGroove                             NO OUTPUT
+  2ndP MGroove                             NO OUTPUT
   7900s Elgam Crazy Band 48                NO AUDIO
   7900s Pearl Drum                         OK
-  7900s XY Controller                      NO AUDIO
+  7900s XY Controller                      NO OUTPUT
   BTDSys Pulsar                            NO AUDIO
   BTDSys Stutter                           NO AUDIO
   Click'n'Pop generator                    NO AUDIO
@@ -50,15 +50,15 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
   HNO3 Divine Intervention                 NO AUDIO
   Harcs WARP                               NO AUDIO
-  IX Split 1.07                            NO AUDIO
-  IX Split 1.08                            NO AUDIO
+  IX Split 1.07                            NO OUTPUT
+  IX Split 1.08                            NO OUTPUT
   Intoxicat Asynchronous Cloud             NO AUDIO
   Intoxicat Asynchronous Cloud             NO AUDIO
   Jeskola Bass                             OK
   Jeskola ES-9                             OK
   Jeskola PM Bass                          OK
   Jeskola PM Bass                          OK
-  Jeskola Pianoroll                        NO AUDIO
+  Jeskola Pianoroll                        NO OUTPUT
   Jeskola Trilok                           NO AUDIO
   Lipid Impulse Tracker Module Loader      NO AUDIO
   MadBrain's 4fm2f                         OK
@@ -90,7 +90,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Zephod Firecracker                       OK
   Zephod HT-700 drums                      OK
   Zephod Magnus                            OK
-  Zephod Midi                              NO AUDIO
+  Zephod Midi                              NO OUTPUT
   Zephod Synth-R-Class                     OK
   Zephod VoidBass II                       OK
   Zephod VoidLead                          OK
@@ -103,9 +103,9 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
   hd.ozz.ru Gen_Station_Ultra_6_Lite       OK
   http://hd.nm.ru - Just_Guitar - 2nd edition OK
-  intoxicat eight-n - step sequencer       NO AUDIO
-  kazuya Graph-64                          NO AUDIO
-  kazuya JoyControl-4                      NO AUDIO
+  intoxicat eight-n - step sequencer       NO OUTPUT
+  kazuya Graph-64                          NO OUTPUT
+  kazuya JoyControl-4                      NO OUTPUT
   kejo's Perlin Noise Generator v0.9       NO AUDIO
   ld PadSynth                              OK
   ld auricula                              OK
@@ -125,7 +125,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
 
 === EFFECTS ===
   10 Band Graphic EQ                       NO AUDIO
-  11-A2M v1.0                              OK
+  11-A2M v1.0                              NO OUTPUT
   11-CSI v1.0                              OK
   11-Delay v1.1                            OK
   11-Distortion v1.0                       OK
@@ -153,7 +153,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Bigyo 2p Filter                          OK
   Bigyo Delay                              OK
   Bigyo FrequencyShifter                   OK
-  Bigyo Pan                                NO AUDIO
+  Bigyo Pan                                OK
   Bigyo ParamEQ                            OK
   Bigyo Shaper                             OK
   Bigyo SoftClip                           OK
@@ -161,7 +161,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Chimp's PowerConvertor v1.0              OK
   Chun-Yu's Smooth Overdrive               OK
   Chun-Yu's TouchWah                       NO AUDIO
-  CnG Recorder                             NO AUDIO
+  CnG Recorder                             NO OUTPUT
   CnW Turbion Geiger                       OK
   CnW Turbion Metal                        OK
   CnW Turbion Voluma                       OK
@@ -176,12 +176,12 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   CyanPhase M-Integral 2                   NO AUDIO
   CyanPhase Mono                           NO AUDIO
   CyanPhase Notch                          OK
-  CyanPhase Recorder                       NO AUDIO
-  CyanPhase SongInfo                       NO AUDIO
+  CyanPhase Recorder                       NO OUTPUT
+  CyanPhase SongInfo                       NO OUTPUT
   CyanPhase UnNative Effects               NO AUDIO
   CyanPhase ViDist 01                      OK
   CyanPhase WaveShaper                     OK
-  CyanPhase mC-1                           NO AUDIO
+  CyanPhase mC-1                           NO OUTPUT
   CyanPhase mC-Delay                       OK
   Dave's SmootherDrive                     OK
   Dave's SmootherDrive                     OK
@@ -401,7 +401,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   WhiteNoise Ringmod                       OK
   WhiteNoise Stereo Mod                    OK
   WhiteNoise Stereo-dist                   OK
-  WhiteNoise Stutter                       TIMEOUT (10s)
+  WhiteNoise Stutter                       NO AUDIO
   WhiteNoise Verb                          OK
   WhiteNoise's Filtron                     OK
   WhiteNoise's Harmonic Delay              NO AUDIO
@@ -481,7 +481,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   ld transient2                            OK
   ld zdelay                                OK
   paniq & zephod's ventilator              OK
-  synopia 3Dizer Buffer Control            NO AUDIO
+  synopia 3Dizer Buffer Control            NO OUTPUT
   synopia EAX2.0 Output                    NO AUDIO
   tonIO                                    NO AUDIO
   vII Graphity                             NO AUDIO
@@ -498,24 +498,21 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   ld grain fx                              NO AUDIO
 
 ========================================
-Results: 371/492 passed
+Results: 371/475 passed (17 no-output machines excluded)
   Audio OK:    371
-  No audio:    119
+  No audio:    103
+  No output:   17  (flagged MIF_NO_OUTPUT/MIF_CONTROL_MACHINE)
   Load failed: 1
   Init failed: 0
   Crashed:     0
-  Timed out:   1
+  Timed out:   0
 ========================================
 
 Failed machines:
-  [GEN] 3Dizer Listener Control                  NO AUDIO
   [GEN] Geonik's Expression 2                    NO AUDIO
   [GEN] Zwar's Repeater                          NO AUDIO
   [GEN] 11-MidiCCout v1.0                        NO AUDIO
-  [GEN] 2ndP IGroove                             NO AUDIO
-  [GEN] 2ndP MGroove                             NO AUDIO
   [GEN] 7900s Elgam Crazy Band 48                NO AUDIO
-  [GEN] 7900s XY Controller                      NO AUDIO
   [GEN] BTDSys Pulsar                            NO AUDIO
   [GEN] BTDSys Stutter                           NO AUDIO
   [GEN] Click'n'Pop generator                    NO AUDIO
@@ -533,11 +530,8 @@ Failed machines:
   [GEN] HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
   [GEN] HNO3 Divine Intervention                 NO AUDIO
   [GEN] Harcs WARP                               NO AUDIO
-  [GEN] IX Split 1.07                            NO AUDIO
-  [GEN] IX Split 1.08                            NO AUDIO
   [GEN] Intoxicat Asynchronous Cloud             NO AUDIO
   [GEN] Intoxicat Asynchronous Cloud             NO AUDIO
-  [GEN] Jeskola Pianoroll                        NO AUDIO
   [GEN] Jeskola Trilok                           NO AUDIO
   [GEN] Lipid Impulse Tracker Module Loader      NO AUDIO
   [GEN] Matilde Tracker                          NO AUDIO
@@ -556,13 +550,9 @@ Failed machines:
   [GEN] Zephod & Thevider WaveEdit               NO AUDIO
   [GEN] Zephod DDM-110 Super Drums               NO AUDIO
   [GEN] Zephod DDM-110 Super Drums               NO AUDIO
-  [GEN] Zephod Midi                              NO AUDIO
   [GEN] cmx HD Player v1.00                      NO AUDIO
   [GEN] cmx Wacko v0.01beta                      NO AUDIO
   [GEN] hd.nm.ru Gen_Station_Ultra_7_Pro-5       NO AUDIO
-  [GEN] intoxicat eight-n - step sequencer       NO AUDIO
-  [GEN] kazuya Graph-64                          NO AUDIO
-  [GEN] kazuya JoyControl-4                      NO AUDIO
   [GEN] kejo's Perlin Noise Generator v0.9       NO AUDIO
   [GEN] ld grain                                 NO AUDIO
   [GEN] ld jacinth2                              NO AUDIO
@@ -578,16 +568,11 @@ Failed machines:
   [FX] 2ndP SMix                                NO AUDIO
   [FX] Automaton 2-pole                         NO AUDIO
   [FX] Automaton Parametric EQ                  NO AUDIO
-  [FX] Bigyo Pan                                NO AUDIO
   [FX] Chun-Yu's TouchWah                       NO AUDIO
-  [FX] CnG Recorder                             NO AUDIO
   [FX] CyanPhase JedShivaMeter                  NO AUDIO
   [FX] CyanPhase M-Integral 2                   NO AUDIO
   [FX] CyanPhase Mono                           NO AUDIO
-  [FX] CyanPhase Recorder                       NO AUDIO
-  [FX] CyanPhase SongInfo                       NO AUDIO
   [FX] CyanPhase UnNative Effects               NO AUDIO
-  [FX] CyanPhase mC-1                           NO AUDIO
   [FX] DedaCode Slicer                          NO AUDIO
   [FX] Dimage's Exponent Distortion             NO AUDIO
   [FX] FSM WahMan Pro 2                         NO AUDIO
@@ -606,7 +591,7 @@ Failed machines:
   [FX] LdC Trigger                              NO AUDIO
   [FX] Lost_Bit iPan                            LOAD
   [FX] MT Side Chain                            NO AUDIO
-  [FX] WhiteNoise Stutter                       TIMEOUT
+  [FX] WhiteNoise Stutter                       NO AUDIO
   [FX] WhiteNoise's Harmonic Delay              NO AUDIO
   [FX] Zephod ADSR                              NO AUDIO
   [FX] Zephod Enveloper                         NO AUDIO
@@ -618,7 +603,6 @@ Failed machines:
   [FX] cheapo amp                               NO AUDIO
   [FX] kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
   [FX] kibibu MultiMerge                        NO AUDIO
-  [FX] synopia 3Dizer Buffer Control            NO AUDIO
   [FX] synopia EAX2.0 Output                    NO AUDIO
   [FX] tonIO                                    NO AUDIO
   [FX] vII Graphity                             NO AUDIO
