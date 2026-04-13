@@ -157,6 +157,7 @@ if(NOT BUZZVST_64BIT)
         tests/test_BuzzOscTables.cpp
         tests/test_BuzzCallbacks.cpp
         tests/test_BuzzMachineLoader.cpp
+        tests/test_BuzzMachineQuirks.cpp
         tests/test_Midi.cpp
         tests/test_GearScanner.cpp
         tests/test_HiDPI.cpp

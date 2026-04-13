@@ -52,6 +52,18 @@ private:
 	BuzzWaveTable waveTable;
 	std::string loadedPath;
 	bool faulted = false;
+	// Some machines have destructors that recurse infinitely / blow the
+	// stack (e.g. Ruff SPECCY II). For those, InitMachine sets this flag
+	// and Unload skips `delete pMachine` to avoid an unrecoverable crash
+	// during cleanup. The instance leaks until process exit; for the VST
+	// plugin host this matters only on machine reload, and the quirked
+	// machines are already unusual enough that the leak is acceptable.
+	bool skipDestructor = false;
+	// Some machines use a statically-linked CRT that registers atexit
+	// handlers in the host CRT at LoadLibraryA time. FreeLibrary unmaps
+	// the DLL but those handler function pointers remain in our atexit
+	// list and crash at process exit. For such machines we leak the HMODULE.
+	bool skipDllUnload = false;
 	std::vector<int> attrVals; // attribute values (initialized to defaults)
 
 	typedef CMachineInfo const* (__cdecl *GetInfoFunc)();

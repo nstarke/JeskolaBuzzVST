@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "BuzzMachineLoader.h"
+#include "BuzzMachineQuirks.h"
 #include "../common/SEHGuard.h"
 #include <cstring>
 #include <cstdio>
@@ -141,6 +142,19 @@ bool BuzzMachineLoader::Load(const char* dllPath)
 		return false;
 	}
 
+	// Refuse to load machines known to corrupt the heap during CreateMachine.
+	if (IsUnsupportedByLoadPath(pInfo)) {
+		char dbg[192];
+		snprintf(dbg, sizeof(dbg),
+			"[BuzzBridgeHost32] Refusing to load blacklisted machine \"%s\" (would corrupt heap in CreateMachine)\n",
+			pInfo->Name ? pInfo->Name : "(null)");
+		OutputDebugStringA(dbg);
+		pInfo = nullptr;
+		FreeLibrary(hDll);
+		hDll = nullptr;
+		return false;
+	}
+
 	// Build parameter layout
 	paramLayout.Build(pInfo);
 
@@ -180,17 +194,67 @@ bool BuzzMachineLoader::InitMachine()
 		OutputDebugStringA(dbg);
 	}
 
+	// Apply per-machine post-CreateMachine workarounds. See the big comment
+	// on ApplyPostCreateQuirks for why and which machines need this.
+	ApplyPostCreateQuirks(pMachine, pInfo);
+
+	// Note unsafe destructors up front so Unload doesn't try to call them.
+	// Quirked machines also get hDll leaked because they typically use a
+	// statically-linked CRT whose atexit handlers survive FreeLibrary.
+	skipDestructor = HasBadDestructor(pInfo);
+	skipDllUnload  = skipDestructor;
+
 	// Set up the machine's host pointers
 	pMachine->pMasterInfo = &masterInfo;
 	pMachine->pCB = &callbacks;
 
-	// Allocate and initialize attribute values with defaults
+	// Initialize attribute values with defaults.
+	//
+	// Normally we allocate our own int buffer and redirect pMachine->AttrVals
+	// at it. This works for machines that read attributes through the
+	// AttrVals pointer. HOWEVER, some machines (e.g. Jeskola Delay) set
+	// AttrVals in their ctor to point at internal storage *inside the
+	// instance*, and then read that internal storage DIRECTLY by hardcoded
+	// offset (e.g. `fild [esi+0xEC]`) instead of via the AttrVals pointer.
+	// If we blindly redirect AttrVals, our defaults never reach the
+	// machine's internal storage — Init reads 0, computes a 0-sample delay
+	// buffer, and the machine is silent (or, with a large uninit garbage
+	// value before our zero-init quirk, hangs on a huge buffer allocation).
+	//
+	// Fix: when the machine's ctor has set AttrVals to a pointer INSIDE the
+	// machine instance (verifiable via QuirkedInstanceSize), write defaults
+	// through that existing pointer so the internal storage gets populated.
+	// Fall back to our own external buffer otherwise. Don't trust a
+	// ctor-provided pointer unconditionally — for machines we don't know
+	// the layout of, it could be garbage and crash on write.
 	if (pInfo->numAttributes > 0 && pInfo->Attributes) {
-		attrVals.resize(pInfo->numAttributes);
-		for (int i = 0; i < pInfo->numAttributes; i++) {
-			attrVals[i] = pInfo->Attributes[i]->DefValue;
+		int* target = nullptr;
+		SIZE_T instSize = QuirkedInstanceSize(pInfo);
+		if (instSize > 0) {
+			int* ctorAttrVals = pMachine->AttrVals;
+			char* base = reinterpret_cast<char*>(pMachine);
+			char* end  = base + instSize;
+			SIZE_T bytesNeeded = pInfo->numAttributes * sizeof(int);
+			if (ctorAttrVals &&
+			    reinterpret_cast<char*>(ctorAttrVals) >= base &&
+			    reinterpret_cast<char*>(ctorAttrVals) + bytesNeeded <= end) {
+				target = ctorAttrVals;
+			}
 		}
-		pMachine->AttrVals = attrVals.data();
+		if (!target) {
+			attrVals.resize(pInfo->numAttributes);
+			target = attrVals.data();
+			pMachine->AttrVals = target;
+		}
+		for (int i = 0; i < pInfo->numAttributes; i++) {
+			target[i] = pInfo->Attributes[i]->DefValue;
+		}
+		char dbg[192];
+		snprintf(dbg, sizeof(dbg),
+			"[BuzzBridgeHost32] AttrVals: target=%p (internal=%d) first=%d\n",
+			(void*)target, (int)(target != attrVals.data()),
+			pInfo->numAttributes > 0 ? target[0] : 0);
+		OutputDebugStringA(dbg);
 	}
 
 	OutputDebugStringA("[BuzzBridgeHost32] InitMachine: calling Init...\n");
@@ -266,18 +330,28 @@ void BuzzMachineLoader::Unload()
 {
 	if (pMachine) {
 		StopMachine();
-		SEH_Call([&]() {
-			delete pMachine;
-		});
+		if (skipDestructor) {
+			// Known-bad destructor — leak to avoid uncatchable crash.
+		} else {
+			SEH_Call([&]() {
+				delete pMachine;
+			});
+		}
 		pMachine = nullptr;
 	}
+	skipDestructor = false;
 
 	pInfo = nullptr;
 	fnGetInfo = nullptr;
 	fnCreateMachine = nullptr;
 
 	if (hDll) {
-		FreeLibrary(hDll);
+		if (!skipDllUnload) {
+			FreeLibrary(hDll);
+		}
+		// For skipDllUnload machines we deliberately leak the HMODULE:
+		// their static CRT registered atexit handlers in our CRT, and
+		// FreeLibrary would leave dangling pointers that crash at exit.
 		hDll = nullptr;
 	}
 
