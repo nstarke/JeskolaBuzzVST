@@ -133,6 +133,32 @@ tresult PLUGIN_API BuzzProcessor::canProcessSampleSize(int32 symbolicSampleSize)
 tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 {
 #ifdef BUZZVST_64BIT
+	// Serialize all bridge access on the audio thread against the message
+	// thread. The bridge pipe is not thread-safe — two concurrent writers
+	// (audio thread calling bridge.Work / bridge.Tick, message thread
+	// calling bridge.DescribeValue / bridge.LoadWave / bridge.SetNumTracks
+	// / bridge.SendMidi*) interleave bytes on the pipe and corrupt the
+	// protocol, after which every subsequent call fails. Holding this
+	// lock for the duration of process() forces message-thread bridge
+	// callers to either wait or not run at all during a process call.
+	std::unique_lock<std::recursive_mutex> bridgeLock(bridgeMutex, std::try_to_lock);
+	if (!bridgeLock.owns_lock()) {
+		// Message thread is currently using the bridge (machine load,
+		// preset load, wave load, etc.). Output silence for this block
+		// rather than block the audio thread — we'll catch up on the
+		// next block once the message thread releases the lock.
+		if (data.numOutputs > 0) {
+			for (int32 ch = 0; ch < data.outputs[0].numChannels; ch++) {
+				if (data.outputs[0].channelBuffers32[ch])
+					memset(data.outputs[0].channelBuffers32[ch], 0,
+					       data.numSamples * sizeof(float));
+			}
+			data.outputs[0].silenceFlags =
+				(1ULL << data.outputs[0].numChannels) - 1;
+		}
+		return kResultOk;
+	}
+
 	// Handle deferred machine load (from notify on UI thread)
 	// Must happen on the audio thread since the bridge pipe isn't thread-safe.
 	if (hasPendingLoad) {
@@ -1076,6 +1102,32 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 		}
 	}
 
+	// Fetch value descriptions NOW, while we have exclusive access to the
+	// bridge pipe (machineReady is still false so the audio thread won't
+	// touch the bridge). sendMachineLoadedToController runs later on the
+	// message thread and used to call bridge.DescribeValue hundreds of
+	// times over the pipe while the audio thread was concurrently calling
+	// bridge.Work — classic pipe-corruption race. Rout 909 has dozens of
+	// byte params with range 63, so the load-complete poll triggered
+	// ~1000 DescribeValue calls interleaved with Work, the bridge saw a
+	// garbled protocol, and every subsequent Work failed (and the host
+	// crashed after enough failures).
+	bridgeValueDescriptions.clear();
+	bridgeValueDescriptions.resize(paramInfos.size());
+	for (int p = 0; p < (int)paramInfos.size(); p++) {
+		auto& pi = paramInfos[p];
+		int range = pi.maxValue - pi.minValue;
+		if (range <= 0 || range > 64) continue;
+		auto& slot = bridgeValueDescriptions[p];
+		slot.resize(range + 1);
+		bool hasAny = false;
+		for (int v = pi.minValue; v <= pi.maxValue; v++) {
+			std::string d = bridge.DescribeValue(p, v);
+			if (!d.empty()) { slot[v - pi.minValue] = std::move(d); hasAny = true; }
+		}
+		if (!hasAny) slot.clear();
+	}
+
 	firstTick = true;
 	samplesUntilNextTick = 0;
 	machineReady = true;
@@ -1177,6 +1229,13 @@ bool BuzzProcessor::loadBuzzMachine(const std::string& path)
 tresult PLUGIN_API BuzzProcessor::setState(IBStream* state)
 {
 	if (!state) return kResultFalse;
+
+#ifdef BUZZVST_64BIT
+	// setState calls loadBuzzMachine which talks to the bridge over the
+	// pipe. Hold the bridge mutex to block audio-thread bridge access
+	// during the reload.
+	std::lock_guard<std::recursive_mutex> bridgeLock(bridgeMutex);
+#endif
 
 	IBStreamer streamer(state, kLittleEndian);
 
@@ -1479,21 +1538,19 @@ void BuzzProcessor::sendMachineLoadedToController()
 	appendDescInt(0); // placeholder
 
 #ifdef BUZZVST_64BIT
+	// IMPORTANT: read from the pre-fetched cache (populated in
+	// loadBuzzMachine while the bridge was idle). Do NOT call
+	// bridge.DescribeValue here — this function runs on the message
+	// thread while the audio thread is using the bridge pipe, and
+	// concurrent pipe access corrupts the protocol.
 	for (int p = 0; p < (int)bridgeParamInfos.size(); p++) {
 		auto& pi = bridgeParamInfos[p];
-		int range = pi.maxValue - pi.minValue;
-		if (range <= 0 || range > 64) continue;
-
-		std::vector<std::string> descs(range + 1);
-		bool hasAny = false;
-		for (int v = pi.minValue; v <= pi.maxValue; v++) {
-			std::string d = bridge.DescribeValue(p, v);
-			if (!d.empty()) { descs[v - pi.minValue] = d; hasAny = true; }
-		}
-		if (!hasAny) continue;
+		if (p >= (int)bridgeValueDescriptions.size()) break;
+		const auto& descs = bridgeValueDescriptions[p];
+		if (descs.empty()) continue;
 
 		appendDescInt(p);
-		appendDescInt(range + 1);
+		appendDescInt((int32_t)descs.size());
 		for (auto& d : descs) {
 			int32_t dLen = (int32_t)d.size();
 			appendDescInt(dLen);
@@ -1625,6 +1682,15 @@ void BuzzProcessor::sendWaveSlotsToController()
 tresult PLUGIN_API BuzzProcessor::notify(IMessage* message)
 {
 	if (!message) return kInvalidArgument;
+
+#ifdef BUZZVST_64BIT
+	// Hold the bridge mutex for the entire notify dispatch. Several message
+	// handlers (BuzzLoadWaves, BuzzSetNumTracks, BuzzPollMachineStatus via
+	// sendMachineLoadedToController, etc.) call bridge functions. Without
+	// this lock they'd race the audio thread's process() which is also
+	// calling bridge.Work/Tick on the same pipe.
+	std::lock_guard<std::recursive_mutex> bridgeLock(bridgeMutex);
+#endif
 
 	{
 		char dbg[256];

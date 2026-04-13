@@ -366,8 +366,10 @@ static void DoWork(int numSamples, int workMode) {
 
 		if (g_loader.GetCallbacks()->isMDKMachine) {
 			// MDK machines expect stereo interleaved: [L0, R0, L1, R1, ...]
-			// Need 2x buffer size since each sample is a stereo pair (8 bytes)
-			float interleavedBuf[MAX_BUFFER_LENGTH * 2];
+			// Oversized to 4x + slop because some MDK stereo effects write
+			// extra beyond what we pass as numsamples — same protection as
+			// the standalone test harness.
+			float interleavedBuf[MAX_BUFFER_LENGTH * 4 + 16] = {};
 			if (workMode & WM_READ) {
 				for (int i = 0; i < blockSize; i++) {
 					interleavedBuf[i * 2] = audio->inputLeft[offset + i];
@@ -405,14 +407,17 @@ static void DoWork(int numSamples, int workMode) {
 				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
 			}
 		} else if (monoToStereo) {
-			float inBuf[MAX_BUFFER_LENGTH];
-			float outBuf[MAX_BUFFER_LENGTH];
+			// Oversized: some mono-to-stereo machines interpret pout as
+			// interleaved stereo and write 2*numsamples floats there. A
+			// stack-sized [MAX_BUFFER_LENGTH] outBuf overflows the stack
+			// frame in that case. This was the cause of Ruff SPECCY II
+			// and similar MDK-derived generators crashing BespokeSynth
+			// with /GS cookie violations (STATUS_STACK_BUFFER_OVERRUN).
+			float inBuf[MAX_BUFFER_LENGTH * 2 + 16]  = {};
+			float outBuf[MAX_BUFFER_LENGTH * 2 + 16] = {};
 			if (workMode & WM_READ) {
 				memcpy(inBuf, audio->inputLeft + offset, blockSize * sizeof(float));
-			} else {
-				memset(inBuf, 0, blockSize * sizeof(float));
 			}
-			memset(outBuf, 0, blockSize * sizeof(float));
 			bool blockOut = false;
 			bool ok = SEH_Call([&]() {
 				blockOut = machine->WorkMonoToStereo(inBuf, outBuf, blockSize, workMode);
@@ -427,11 +432,12 @@ static void DoWork(int numSamples, int workMode) {
 				memset(audio->outputRight + offset, 0, blockSize * sizeof(float));
 			}
 		} else {
-			float workBuf[MAX_BUFFER_LENGTH];
+			// Oversized: some generators and stereo effects write past
+			// the nominal numsamples end of psamples. See the comment in
+			// the MonoToStereo branch and in test_AllMachines.cpp.
+			float workBuf[MAX_BUFFER_LENGTH * 2 + 16] = {};
 			if (workMode & WM_READ) {
 				memcpy(workBuf, audio->inputLeft + offset, blockSize * sizeof(float));
-			} else {
-				memset(workBuf, 0, blockSize * sizeof(float));
 			}
 			bool blockOut = false;
 			bool ok = SEH_Call([&]() {

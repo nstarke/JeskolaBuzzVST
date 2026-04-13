@@ -72,7 +72,6 @@ protected:
 	int currentNumTracks = 1;
 	int machineMinTracks = 0;
 	int machineMaxTracks = 0;
-	int currentSampleRate = 0;
 
 private:
 	HMODULE hInfoDll = nullptr;

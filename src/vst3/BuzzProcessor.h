@@ -14,6 +14,7 @@
 #include <vector>
 #include <string>
 #include <atomic>
+#include <mutex>
 
 namespace BuzzVst {
 
@@ -79,10 +80,27 @@ protected:
 
 #ifdef BUZZVST_64BIT
 	BridgeClient bridge;
+	// The bridge pipe is not thread-safe. The audio thread (process())
+	// and the message thread (notify(), sendMachineLoadedToController,
+	// setState, etc.) can both issue bridge commands. Without a lock,
+	// two writers interleave bytes on the pipe and the bridge sees a
+	// corrupted protocol — after which every subsequent Work() fails.
+	// This manifested as "loading Rout 909 crashes BespokeSynth": the
+	// controller's load-complete poll triggered hundreds of bridge.
+	// DescribeValue() calls on the message thread while the audio
+	// thread was still calling bridge.Work() every buffer.
+	std::recursive_mutex bridgeMutex;
 	bool bridgeStarted = false;
 	std::string bridgeHostPath;
 	std::vector<BridgeParamInfo> bridgeParamInfos; // cached for sending to controller
 	std::string bridgeMachineName; // cached machine name from bridge
+	// Value descriptions cached at load time so sendMachineLoadedToController
+	// doesn't have to hammer the bridge pipe from the message thread while
+	// the audio thread is using it. Outer vector is indexed by flat param
+	// index (globals first, then track params), inner vector is indexed by
+	// value - minValue. Empty inner vector means "no descriptions for this
+	// param" (either out of range or all blank).
+	std::vector<std::vector<std::string>> bridgeValueDescriptions;
 	// Cached note/velocity slot indices for writeNoteToParams (since loader is unavailable)
 	int bridgeGlobalNoteSlot = -1;
 	int bridgeGlobalVelSlot = -1;
@@ -148,9 +166,17 @@ protected:
 	// Bypass
 	bool bBypass = false;
 
-	// Work buffers for Buzz's 256-sample limit
-	float workBufLeft[MAX_BUFFER_LENGTH];
-	float workBufRight[MAX_BUFFER_LENGTH];
+	// Work buffers for Buzz's 256-sample limit. Oversized to 2x + slop
+	// because some machines (e.g. Rout 909 via DSP_Add/DSP_Zero from
+	// dsplib.dll; Ruff SPECCY II and other MDK-derived generators)
+	// interpret psamples as stereo-interleaved and write up to
+	// 2 * numsamples floats into it, or simply write past the nominal
+	// numsamples end. Without the extra room a single Work call can
+	// overflow this class member into adjacent members / vtable and
+	// either crash (debug heap / /GS) or silently corrupt. This was
+	// the cause of the "loading Rout 909 crashes BespokeSynth" reports.
+	float workBufLeft[MAX_BUFFER_LENGTH * 2 + 16];
+	float workBufRight[MAX_BUFFER_LENGTH * 2 + 16];
 
 	// ---- Sample-rate conversion (Buzz machines assume 44100 Hz) ----
 	bool needsResampling = false;  // true when host rate != 44100
