@@ -185,7 +185,6 @@ tresult PLUGIN_API BuzzPluginView::removed()
 		hwndAddTrackButton = nullptr;
 		hwndRemoveTrackButton = nullptr;
 		hwndTrackLabel = nullptr;
-		hwndSampleRateWarning = nullptr;
 		hwndGearLabel = nullptr;
 		hwndFilterEdit = nullptr;
 		hwndMachineList = nullptr;
@@ -317,11 +316,8 @@ void BuzzPluginView::createControls(HWND parent)
 	SendMessage(hwndPathLabel, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
 	y += S(16);
 
-	// Sample rate warning (hidden by default, shown if not 44100)
-	hwndSampleRateWarning = CreateWindowExW(0, L"STATIC", L"",
-		WS_CHILD | SS_CENTER,
-		margin, y, w - 2 * margin, S(14), hwndContainer, nullptr, hInst, nullptr);
-	SendMessage(hwndSampleRateWarning, WM_SETFONT, (WPARAM)hSmallFont, TRUE);
+	// (Sample-rate mismatch warning used to live here; removed because
+	// BuzzResampler now interpolates host rate ↔ 44100 for us.)
 
 	// Buttons row
 	int btnW = S(180);
@@ -1036,21 +1032,6 @@ void BuzzPluginView::populateMachineList()
 		char buf[512];
 		snprintf(buf, sizeof(buf), "Gear: %s (%d machines)", gearDir.c_str(), count);
 		SetWindowTextA(hwndGearLabel, buf);
-	}
-}
-
-void BuzzPluginView::setSampleRateWarning(int sampleRate)
-{
-	if (!hwndSampleRateWarning) return;
-	if (sampleRate != 44100 && sampleRate > 0) {
-		char msg[256];
-		snprintf(msg, sizeof(msg),
-			"WARNING: Sample rate is %d Hz. Buzz machines expect 44100 Hz. Audio may sound incorrect.",
-			sampleRate);
-		SetWindowTextA(hwndSampleRateWarning, msg);
-		ShowWindow(hwndSampleRateWarning, SW_SHOW);
-	} else {
-		ShowWindow(hwndSampleRateWarning, SW_HIDE);
 	}
 }
 
