@@ -434,7 +434,7 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   Zu Parametric EQ                         OK
   Zu Slicer                                NO AUDIO
   Zu Tube Head                             OK
-  Zu ¦Taps                                 LOAD FAIL
+  Zu µTaps                                 OK
   aNEurYSm DistGarb                        OK
   asedev Gain01                            OK
   asedev Gain02                            OK
@@ -498,10 +498,10 @@ Testing 120 generators, 372 effects (skipped 26 VST/Peer)
   ld grain fx                              NO AUDIO
 
 ========================================
-Results: 370/492 passed
-  Audio OK:    370
+Results: 371/492 passed
+  Audio OK:    371
   No audio:    119
-  Load failed: 2
+  Load failed: 1
   Init failed: 0
   Crashed:     0
   Timed out:   1
@@ -615,7 +615,6 @@ Failed machines:
   [FX] Zephod MoogFiltah                        NO AUDIO
   [FX] Zephod ReSaw                             NO AUDIO
   [FX] Zu Slicer                                NO AUDIO
-  [FX] Zu ¦Taps                                 LOAD
   [FX] cheapo amp                               NO AUDIO
   [FX] kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
   [FX] kibibu MultiMerge                        NO AUDIO
