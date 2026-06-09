@@ -109,6 +109,16 @@ if(SMTG_WIN)
     target_link_libraries(BuzzBridge PRIVATE kernel32 comdlg32 user32 gdi32 shell32 ole32)
 endif()
 
+if(MINGW)
+    # On Windows, GetPluginFactory is declared __stdcall (PLUGIN_API), so the
+    # mingw/clang linker exports it decorated as "GetPluginFactory@0". The VST3
+    # spec (and yabridge) require the undecorated name "GetPluginFactory" --
+    # MSVC builds get this via the SDK's /EXPORT:GetPluginFactory link flag,
+    # which does not apply here. --kill-at strips the @N suffix from exports
+    # while keeping the __stdcall calling convention intact.
+    target_link_options(BuzzBridge PRIVATE -Wl,--kill-at)
+endif()
+
 if(SMTG_MAC)
     smtg_target_set_bundle(BuzzBridge
         BUNDLE_IDENTIFIER "com.jeskolabuzzvst.buzzbridge"
