@@ -448,7 +448,28 @@ public:
 class CMachineInterface
 {
 public:
+#if defined(__MINGW32__) && !defined(_MSC_VER)
+	// ABI FIX (clang/GCC mingw cross build, used for WINE+yabridge):
+	//
+	// Buzz machine DLLs are MSVC-compiled. Under the Microsoft C++ ABI a
+	// virtual destructor occupies exactly ONE vtable slot (slot 0), so the
+	// machine's vtable is [dtor, Init, Tick, Work, ...]. The Itanium C++ ABI
+	// that clang/GCC use on the mingw target instead emits TWO slots for a
+	// virtual destructor (complete + deleting), giving [D1, D0, Init, Tick,
+	// Work, ...]. That shifts every method by one slot, so the host calling
+	// pMachine->Init() would actually invoke the machine's Tick(), Work()
+	// would hit WorkMonoToStereo(), etc. — the machine inits but is silent.
+	//
+	// Match MSVC's single-dtor-slot layout: occupy slot 0 with one ordinary
+	// virtual placeholder and make the real destructor non-virtual. The host
+	// never deletes a machine via this dtor; BuzzMachineLoader::Unload()
+	// invokes the machine's own MSVC scalar-deleting destructor through
+	// vtable[0] directly (see Unload).
+	virtual void __abi_dtor_slot0() {}
+	~CMachineInterface() {}
+#else
 	virtual ~CMachineInterface() {}
+#endif
 	virtual void Init(CMachineDataInput * const pi) {}
 	virtual void Tick() {}
 	virtual bool Work(float *psamples, int numsamples, int const mode) { return false; }

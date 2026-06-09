@@ -546,7 +546,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Hardcoded list of previously-failing machines. Keep in sync with
-    // machine-support.txt failures when adding new quirks.
+    // machine-support_windows.txt failures when adding new quirks.
     static const char* kFailingMachines[] = {
         "7900s Pearl Drum",
         "Automaton Wave Input",

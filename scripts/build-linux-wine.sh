@@ -6,12 +6,15 @@
 # is unnecessary because yabridge already handles the 64<->32 boundary.
 #
 # Usage:
-#   ./scripts/build-linux-wine.sh              # build only
+#   ./scripts/build-linux-wine.sh              # build the plugin only
 #   ./scripts/build-linux-wine.sh --install    # build + yabridgectl add
+#   ./scripts/build-linux-wine.sh --test       # also build + run the unit
+#                                              #   test suite under WINE
 #
 # Requirements on host:
 #   - bash, curl, tar, cmake (>=3.25), git, wine (for yabridge runtime)
 #   - yabridge + yabridgectl (only for --install)
+#   - wine (only for --test)
 #
 # llvm-mingw is downloaded on first run into third_party/llvm-mingw unless
 # LLVM_MINGW_ROOT is already set.
@@ -29,11 +32,13 @@ LLVM_MINGW_RELEASE="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64"
 LLVM_MINGW_URL="https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${LLVM_MINGW_RELEASE}.tar.xz"
 
 INSTALL_TO_YABRIDGE=0
+RUN_TESTS=0
 for arg in "$@"; do
     case "$arg" in
         --install) INSTALL_TO_YABRIDGE=1 ;;
+        --test|--tests) RUN_TESTS=1 ;;
         -h|--help)
-            sed -n '2,20p' "$0"; exit 0 ;;
+            sed -n '2,22p' "$0"; exit 0 ;;
         *) echo "unknown arg: $arg" >&2; exit 1 ;;
     esac
 done
@@ -112,6 +117,22 @@ rm -rf "${DIST_DIR}"
 mkdir -p "${DIST_DIR}"
 cp -a "${BUILT_PLUGIN}" "${DIST_DIR}/BuzzBridge.vst3"
 echo "[build-wine] plugin ready at: ${DIST_DIR}/BuzzBridge.vst3"
+
+# --- optional: build + run the unit test suite under WINE -----------------
+# The test suite (173+ cases) is a 32-bit Windows .exe; with the static
+# llvm-mingw runtime it runs directly under WINE — no special host needed.
+if [[ "${RUN_TESTS}" -eq 1 ]]; then
+    need wine
+    echo "[build-wine] building BuzzBridgeTests..."
+    cmake --build "${BUILD_DIR}" --target BuzzBridgeTests
+    TEST_EXE="$(find "${BUILD_DIR}" -type f -name 'BuzzBridgeTests.exe' | head -n1)"
+    if [[ -z "${TEST_EXE}" ]]; then
+        echo "[build-wine] could not locate BuzzBridgeTests.exe" >&2
+        exit 1
+    fi
+    echo "[build-wine] running tests under WINE..."
+    WINEDEBUG="${WINEDEBUG:-fixme-all,err-all}" wine "${TEST_EXE}"
+fi
 
 # --- optional: register with yabridge -------------------------------------
 if [[ "${INSTALL_TO_YABRIDGE}" -eq 1 ]]; then

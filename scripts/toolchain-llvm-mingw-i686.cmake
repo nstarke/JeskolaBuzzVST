@@ -48,3 +48,13 @@ add_compile_definitions(WIN32 _WINDOWS SMTG_OS_WINDOWS=1)
 # stdlib.h does not expose — it only has _aligned_malloc. Tell libc++ not
 # to try. Without this, <cstdlib>/<utility> fail to compile.
 add_compile_definitions(_LIBCPP_HAS_NO_C11_ALIGNED_ALLOC=1)
+
+# Statically link the llvm-mingw C++ runtime (libc++), the unwinder
+# (libunwind) and compiler-rt into every artifact. Without this the produced
+# BuzzBridge.vst3 / .exe files import libc++.dll and libunwind.dll, which are
+# NOT present in a stock WINE prefix — so the plugin would fail to load under
+# yabridge with status c0000135 (missing DLL). -static makes each binary
+# self-contained; only system DLLs (kernel32, user32, ...) remain as imports.
+set(CMAKE_EXE_LINKER_FLAGS_INIT    "-static")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-static")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "-static")

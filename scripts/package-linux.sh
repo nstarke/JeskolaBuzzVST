@@ -38,22 +38,22 @@ rm -rf "${STAGING}" "${TARBALL}"
 mkdir -p "${STAGING}"
 
 cp "${PLUGIN_FILE}"                        "${STAGING}/BuzzBridge.vst3"
-cp "${SCRIPT_DIR}/install-linux.sh"        "${STAGING}/install.sh"
+cp "${SCRIPT_DIR}/install-linux.sh"        "${STAGING}/installer.sh"
 cp "${SCRIPT_DIR}/uninstall-linux.sh"      "${STAGING}/uninstall.sh"
-chmod +x "${STAGING}/install.sh" "${STAGING}/uninstall.sh"
+chmod +x "${STAGING}/installer.sh" "${STAGING}/uninstall.sh"
 
-# Substitute the machine database release-asset URL into install.sh. Only
+# Substitute the machine database release-asset URL into installer.sh. Only
 # valid for tagged releases (version starts with "v"); dev/ci tarballs get
-# an empty URL so install.sh shows a helpful manual-download message.
+# an empty URL so installer.sh shows a helpful manual-download message.
 MDB_URL=""
 if [[ "${VERSION}" =~ ^v[0-9] ]]; then
     MDB_URL="https://github.com/nstarke/JeskolaBuzzVST/releases/download/${VERSION}/mdb_machines.zip"
 fi
 # macOS sed needs the backup arg; GNU sed does not. Handle both.
 if sed --version >/dev/null 2>&1; then
-    sed -i "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/install.sh"
+    sed -i "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/installer.sh"
 else
-    sed -i '' "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/install.sh"
+    sed -i '' "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/installer.sh"
 fi
 
 cat > "${STAGING}/README.txt" <<EOF
@@ -70,7 +70,7 @@ Requirements:
   - yabridge + yabridgectl
 
 Install:
-  ./install.sh
+  ./installer.sh
 
 Uninstall:
   ./uninstall.sh

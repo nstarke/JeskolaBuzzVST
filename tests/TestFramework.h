@@ -11,6 +11,8 @@
 #include <string>
 #include <functional>
 
+#include "common/SEHGuard.h"
+
 namespace TestFW {
 
 struct TestCase {
@@ -53,18 +55,10 @@ inline void ReportFailure(const char* file, int line, const char* expr) {
 typedef void (*RawTestFunc)();
 
 inline bool RunTestWithSEH(RawTestFunc fn) {
-#ifdef _WIN32
-	__try {
-		fn();
-		return true;
-	}
-	__except (1) {
-		return false;
-	}
-#else
-	fn();
-	return true;
-#endif
+	// Uses real SEH on MSVC, a VEH+longjmp guard under clang-mingw/WINE, and a
+	// passthrough elsewhere — so a crashing test is reported as CRASH instead
+	// of taking down the whole runner. See src/common/SEHGuard.h.
+	return BuzzVst::SEH_Call([&]() { fn(); });
 }
 
 inline int RunAllTests() {
