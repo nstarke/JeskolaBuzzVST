@@ -21,7 +21,7 @@ set TMP_OUT=%TEMP%\buzz_machine_tests_%RANDOM%.txt
 %EXE% %* > "%TMP_OUT%"
 set RC=%ERRORLEVEL%
 type "%TMP_OUT%"
-powershell -NoProfile -Command "$lines = Get-Content -LiteralPath $env:TMP_OUT; $match = $lines | Select-String -Pattern 'Found \d+ machines total' | Select-Object -First 1; if ($match) { $lines[($match.LineNumber - 1)..($lines.Count - 1)] | Set-Content -LiteralPath 'machine-support.txt' }"
+powershell -NoProfile -Command "$lines = Get-Content -LiteralPath $env:TMP_OUT; $match = $lines | Select-String -Pattern 'Found \d+ machines total' | Select-Object -First 1; if ($match) { $lines[($match.LineNumber - 1)..($lines.Count - 1)] | Set-Content -LiteralPath 'machine-support_windows.txt' }"
 del "%TMP_OUT%"
 popd
 exit /b %RC%

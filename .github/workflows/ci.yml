@@ -92,8 +92,27 @@ jobs:
           path: third_party/llvm-mingw
           key: llvm-mingw-20250709-ubuntu-22.04
 
+      - name: Install WINE (32-bit) for tests
+        run: |
+          # BuzzBridgeTests.exe is a 32-bit PE; the distro WINE on ubuntu-latest
+          # uses classic WoW64, so the 32-bit wine (wine32:i386) is required.
+          # xvfb provides a headless display for first-run prefix init.
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y wine wine32:i386 xvfb
+
       - name: Cross-build BuzzBridge for WINE
         run: ./scripts/build-linux-wine.sh
+
+      - name: Run unit tests under WINE
+        env:
+          WINEDEBUG: -all
+        run: |
+          # Reuse the build-wine tree the cross-build step configured; just add
+          # the test target and run the statically-linked exe under WINE. xvfb
+          # gives WINE a headless display for first-run prefix init.
+          cmake --build build-wine --target BuzzBridgeTests
+          xvfb-run -a wine build-wine/bin/BuzzBridgeTests.exe
 
       - name: Package Linux tarball
         run: ./scripts/package-linux.sh "ci-${{ github.sha }}"

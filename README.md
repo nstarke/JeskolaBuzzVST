@@ -183,7 +183,7 @@ Download `BuzzBridge-Linux-vX.Y.Z.tar.gz` from the [Releases](https://github.com
 ```bash
 tar xf BuzzBridge-Linux-vX.Y.Z.tar.gz
 cd BuzzBridge-Linux-vX.Y.Z
-./install.sh
+./installer.sh
 ```
 
 The installer copies `BuzzBridge.vst3` to `~/.local/share/BuzzBridge/`, registers that directory with `yabridgectl`, and runs `yabridgectl sync` to generate the native Linux VST3 shim. It then prompts you to download the Buzz machine database (~30 MB, 726 machines) and extract it to `$HOME/Buzz/Gear`.
@@ -191,11 +191,11 @@ The installer copies `BuzzBridge.vst3` to `~/.local/share/BuzzBridge/`, register
 Options:
 
 ```bash
-./install.sh --with-machines    # install machine DB without prompting
-./install.sh --no-machines      # skip machine DB without prompting
+./installer.sh --with-machines    # install machine DB without prompting
+./installer.sh --no-machines      # skip machine DB without prompting
 ```
 
-Override the install location with `BUZZVST_INSTALL_DIR=/custom/path ./install.sh`.
+Override the install location with `BUZZVST_INSTALL_DIR=/custom/path ./installer.sh`.
 
 To uninstall:
 
@@ -233,11 +233,63 @@ export BUZZVST_BACKUP_DIR='Z:\home\alice\buzz-preset-backups'
 
 If neither `BUZZVST_BACKUP_DIR` nor `%USERPROFILE%\OneDrive` resolves to an existing directory, preset backups are silently skipped and the primary `.prs` file beside each machine DLL is the only copy.
 
+### Running the tests on Linux
+
+The unit test suite builds and runs under WINE — it is a 32-bit Windows `.exe`
+that, thanks to the static llvm-mingw runtime, needs no extra DLLs:
+
+```bash
+./scripts/build-linux-wine.sh --test
+```
+
+This builds `BuzzBridgeTests.exe` with the cross toolchain and runs all 630+
+cases under WINE. To exercise real Buzz machine DLLs and produce a Linux
+compatibility report (the counterpart of the Windows `machine-support_windows.txt`):
+
+```bash
+./scripts/run_machine_tests_linux.sh           # uses the bundled machine DB
+./scripts/run_machine_tests_linux.sh <gear_dir>
+```
+
+The result table is written to `machine-support_linux.txt`.
+
+### Crash protection on Linux
+
+Under MSVC, BuzzBridge wraps every call into machine code in `__try`/`__except`
+so a buggy machine can't crash the host. Clang's i686 SEH is unusable here
+(broken assembler labels for templated lambdas), so the Linux build installs a
+process-wide **Vectored Exception Handler** and `longjmp`s out of it back to a
+per-call landing pad (see `src/common/SEHGuard.h`). `AddVectoredExceptionHandler`
+is a plain Win32 API that works under WINE regardless of compiler, so a faulting
+Buzz machine (access violation, illegal instruction, divide-by-zero, …) is
+caught and the plugin survives instead of taking down the WINE host process.
+Set `BUZZ_NO_VEH=1` in the environment to disable it. It is a first-chance
+handler, so in the rare case a machine relies on its *own* internal
+`__try`/`__except` to recover from a hard fault, ours preempts it; and a stack
+overflow is deliberately left uncaught.
+
+### vtable ABI fix (why audio works under the cross build)
+
+Buzz machine DLLs are MSVC-compiled. Under the Microsoft C++ ABI a virtual
+destructor occupies exactly **one** vtable slot, so a machine's vtable is
+`[dtor, Init, Tick, Work, …]`. The Itanium C++ ABI that clang/GCC use on the
+mingw target emits **two** slots for a virtual destructor (complete + deleting),
+giving `[D1, D0, Init, Tick, Work, …]`. That one-slot shift meant the
+cross-compiled host calling `pMachine->Init()` actually invoked the machine's
+`Tick()`, `Work()` hit `WorkMonoToStereo()`, and so on — every machine inited
+but produced **silence**. (Native Windows is unaffected: host and machine are
+both MSVC, so both use one dtor slot.)
+
+`CMachineInterface` in `MachineInterface.h` is therefore declared with a single
+placeholder virtual in slot 0 and a non-virtual destructor on the clang-mingw
+build, reproducing MSVC's layout so every method index lines up.
+`BuzzMachineLoader::Unload()` deletes a machine through its own MSVC
+scalar-deleting destructor at `vtable[0]` to compensate. With this fix the
+Linux sweep matches Windows machine-for-machine; compare
+`machine-support_linux.txt` against `machine-support_windows.txt`.
+
 ### Limitations
 
-- **No structured exception handling.** Under MSVC, BuzzBridge wraps every call into machine code in `__try`/`__except` so a buggy machine can't crash the host process. Clang's i686 SEH implementation has known bugs with templated lambdas, so the Linux build falls back to passthrough calls. A crashing Buzz machine will kill the yabridge-hosted plugin process — yabridge isolates this from your DAW, but the plugin instance will need to be reloaded.
-- **No unit tests** are built or run on Linux. The test suite still requires MSVC and is wired into the Windows `scripts/build.bat` path.
-- **Tested machines only.** The same 40ish Buzz machines that are broken on Windows (see `machine-support.txt`) are broken under WINE as well. WINE introduces no additional known incompatibilities but has not been audited against the full machine set.
 - **GUI chrome.** The "Load Buzz Machine..." file dialog uses Win32 `GetOpenFileName` and renders in WINE's default style rather than your Linux desktop theme. Functional but not native-looking.
 
 ## Running Tests

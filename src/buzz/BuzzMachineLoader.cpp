@@ -334,7 +334,20 @@ void BuzzMachineLoader::Unload()
 			// Known-bad destructor — leak to avoid uncatchable crash.
 		} else {
 			SEH_Call([&]() {
+#if defined(__MINGW32__) && !defined(_MSC_VER)
+				// On the clang/mingw cross build CMachineInterface's dtor is
+				// intentionally non-virtual (single-slot vtable to match MSVC,
+				// see MachineInterface.h), so `delete pMachine` would not run
+				// the machine's real destructor and would free the object with
+				// the host's operator delete instead of the machine's. Invoke
+				// the machine's own MSVC scalar-deleting destructor at vtable[0]
+				// with flags=1 (destruct + operator delete in the machine's CRT).
+				void** vt = *reinterpret_cast<void***>(pMachine);
+				typedef void* (__thiscall *ScalarDeletingDtor)(void* self, unsigned int flags);
+				reinterpret_cast<ScalarDeletingDtor>(vt[0])(pMachine, 1);
+#else
 				delete pMachine;
+#endif
 			});
 		}
 		pMachine = nullptr;

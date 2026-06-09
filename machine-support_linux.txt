@@ -1,0 +1,557 @@
+Found 522 machines total
+Testing 124 generators, 379 effects (skipped 19 VST/Peer)
+
+=== GENERATORS ===
+  3Dizer Listener Control                  NO OUTPUT
+  Geonik's Expression 2                    SILENT
+  11-MidiCCout v1.0                        SILENT
+  2ndP IGroove                             NO OUTPUT
+  2ndP LoopJump HACK 1.1                   NO OUTPUT
+  2ndP MGroove                             NO OUTPUT
+  7900s Elgam Crazy Band 48                SILENT
+  7900s Pearl Drum                         OK
+  7900s XY Controller                      NO OUTPUT
+  BTDSys SeqStep                           NO OUTPUT
+  BTDSys Stutter                           SILENT
+  Click'n'Pop generator                    OK
+  Climox 303 v2.10.1                       OK
+  Climox Breaker v1.0                      SILENT
+  CyanPhase DTMF-1                         NO AUDIO
+  Elenzil Frequency Bomb                   OK
+  ErsBlipp                                 OK
+  ErsClaves                                OK
+  ErsCowbell                               OK
+  ErsCymbal                                OK
+  ErsHihat                                 OK
+  ErsKick                                  OK
+  ErsSnare                                 OK
+  FSM ArpMan                               OK
+  FSM Infector                             SILENT
+  FSM Kick                                 OK
+  FSM Kick XP                              OK
+  FUK FIRe Synth                           OK
+  Frequency UnKnown Mr Brown               OK
+  Fuzzpilz Kitchen Sink 2                  OK
+  Fuzzpilz Orange Kid                      OK
+  Fuzzpilz Trigger Trigger                 OK
+  Fuzzpilz UnwieldyTracker                 SILENT
+  Geoffroy TapTempoHACK                    NO OUTPUT
+  Geonik's Omega-1                         NO AUDIO
+  Geonik's Plucked String                  OK
+  Geonik's PrimiFun                        OK
+  HACK P. DooM's Jump                      SILENT
+  HACK P. DooM's Msync                     NO OUTPUT
+  HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
+  HD GARAGE  (hd.gut.ru - hdd@nm.ru)       SILENT
+  HD Guitar at hd.ozz.ru - beta            OK
+  HD Master Kick (No liner!)               OK
+  HD OzO (beta version)                    OK
+  HD Percussive_FM  (hd.gut.ru - hdd@nm.ru)   SILENT
+  HD Phat-Grad  (hd.gut.ru - hdd@nm.ru)    SILENT
+  HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
+  HNO3 Divine Intervention                 SILENT
+  Harcs WARP                               NO AUDIO
+  IX Split 1.07                            NO OUTPUT
+  IX Split 1.08                            NO OUTPUT
+  Intoxicat Asynchronous Cloud             SILENT
+  Intoxicat Asynchronous Cloud             SILENT
+  Jeskola Bass                             OK
+  Jeskola Pianoroll                        NO OUTPUT
+  Jeskola Trilok                           SILENT
+  Ko Dream Improv Melody Generator         NO OUTPUT
+  Kozaluss GenB                            SILENT
+  Kozaluss GenC                            SILENT
+  Kozaluss GenC NoInertia                  SILENT
+  Kozaluss GenD                            SILENT
+  Kozaluss GenD NoInertia                  SILENT
+  Kozaluss HSync                           SILENT
+  Kozaluss Noizza                          SILENT
+  MadBrain's 4fm2f                         OK
+  MadBrain's D500                          OK
+  MadBrain's Dynamite 6 1.2                OK
+  MadBrain's Table Warp                    OK
+  Matilde Tracker                          SILENT
+  Matilde Tracker2                         SILENT
+  Mp3 Loader Version 0.1                   SILENT
+  Muon Synth                               OK
+  Oomek Aggressor 3o3                      SILENT
+  Q Piano                                  OK
+  Rebirth MIDI Controller                  SILENT
+  RectalAnarchy                            SILENT
+  Rout SoundFont Loader                    SILENT
+  Ruff Speccy II                           OK
+  Rymix KyrieSpectra                       SILENT
+  Saxpy's HT-700                           OK
+  Sgorpi Clap                              SILENT
+  Sgorpi's Mean Bassdrum Machine           ERROR (code=-1073741784)
+  SuperDonut Ultimate Drum                 SILENT
+  TEH NOISEMAKING                          OK
+  WhiteNoise Scratcher                     NO AUDIO
+  Zephod & Thevider WaveEdit               SILENT
+  Zephod Blok2009                          ERROR (code=-1073740791)
+  Zephod DDM-110 Super Drums               OK
+  Zephod DDM-110 Super Drums               OK
+  Zephod Firecracker                       OK
+  Zephod HT-700 drums                      OK
+  Zephod Magnus                            OK
+  Zephod Midi                              NO OUTPUT
+  Zephod Synth-R-Class                     OK
+  Zephod VoidBass II                       OK
+  Zephod VoidLead                          OK
+  Zephod VoidSynth II                      OK
+  cmx HD Player v1.00                      SILENT
+  cmx Wacko T1 v0.90beta                   OK
+  cmx Wacko v0.01beta                      NO AUDIO
+  farbrausch V2                            INIT FAIL
+  farbrausch V2                            INIT FAIL
+  hd.nm.ru Gen_Station_Ultra_7_Pro-5       SILENT
+  hd.ozz.ru Gen_Station_Ultra_6_Lite       OK
+  http://hd.nm.ru - Just_Guitar - 2nd edition OK
+  intoxicat eight-n - step sequencer       NO OUTPUT
+  kazuya JoyControl-4                      NO OUTPUT
+  kejo's Perlin Noise Generator v0.9       SILENT
+  ld PadSynth                              OK
+  ld auricula                              OK
+  ld clap                                  OK
+  ld cymbal                                OK
+  ld grain                                 SILENT
+  ld jacinth2                              NO AUDIO
+  ld snare                                 OK
+  paniq WavEd                              SILENT
+  paniq's plutonium                        SILENT
+  pooplog 8 stage width modulation synth dual envelope OK
+  pooplog fast pulse width modulation envelope OK
+  rDev Software Continous Wave Reader III  SILENT
+  rewire2lnk                               SILENT
+  ruff AMNIBUS                             SILENT
+  ruff KOLOBOK                             SILENT
+  vII MidiOut                              SILENT
+
+=== EFFECTS ===
+  10 Band Graphic EQ                       OK
+  11-A2M v1.0                              NO OUTPUT
+  11-CSI v1.0                              OK
+  11-Delay v1.1                            OK
+  11-Distortion v1.0                       OK
+  11-RhythmGate v1.1                       OK
+  11-SignSplit v1.0                        OK
+  11-Zerhacker v0.9                        OK
+  2ndP SMix                                OK
+  2ndProcess Dirtyfier                     OK
+  7900s 'Osc' Amplitude Modulator          OK
+  AutoFade v1.0                            OK
+  Automaton 2-pole                         NO AUDIO
+  Automaton Balance                        OK
+  Automaton Compressor                     OK
+  Automaton Compressor mkII                OK
+  Automaton DC Eliminator                  OK
+  Automaton EQ-7                           OK
+  Automaton Expander                       OK
+  Automaton Mono                           OK
+  Automaton Parametric EQ                  NO AUDIO
+  BG Compressor                            OK
+  BG Compressor & Gate                     OK
+  BG MaxiLimiter                           OK
+  BG Noise Gate                            OK
+  BG Sidechain Dynamics                    OK
+  Bigyo 2p Filter                          OK
+  Bigyo Delay                              OK
+  Bigyo FrequencyShifter                   OK
+  Bigyo Pan                                OK
+  Bigyo ParamEQ                            OK
+  Bigyo Shaper                             OK
+  Bigyo SoftClip                           OK
+  Chimp's FXor v1.0                        OK
+  Chimp's PowerConvertor v1.0              OK
+  Chun-Yu's Smooth Overdrive               OK
+  Chun-Yu's TouchWah                       NO AUDIO
+  CnG Recorder                             NO OUTPUT
+  CnW Turbion Geiger                       OK
+  CnW Turbion Metal                        OK
+  CnW Turbion Voluma                       OK
+  CyanPhase AtomStereoMeld                 OK
+  CyanPhase AutoDC Blocker                 OK
+  CyanPhase DMO Adapter                    TIMEOUT (10s)
+  CyanPhase DX Effect Adapter              OK
+  CyanPhase JedShivaMeter                  OK
+  CyanPhase KrashBox                       OK
+  CyanPhase M-Derive                       OK
+  CyanPhase M-Derive 2                     OK
+  CyanPhase M-Integral 2                   NO AUDIO
+  CyanPhase Mono                           OK
+  CyanPhase Notch                          OK
+  CyanPhase Recorder                       NO OUTPUT
+  CyanPhase SongInfo                       NO OUTPUT
+  CyanPhase UnNative Effects               OK
+  CyanPhase ViDist 01                      OK
+  CyanPhase WaveShaper                     OK
+  CyanPhase mC-1                           NO OUTPUT
+  CyanPhase mC-Delay                       OK
+  Dave's SmootherDrive                     OK
+  Dave's SmootherDrive                     OK
+  DedaCode Degradation                     OK
+  DedaCode Degradation                     OK
+  DedaCode Fade                            OK
+  DedaCode Fade                            OK
+  DedaCode Hoffman_Scratch                 OK
+  DedaCode LaD|Box v1.2                    OK
+  DedaCode Moving_Average                  OK
+  DedaCode PizzaBuffer v2.0                OK
+  DedaCode SFilterFIR                      OK
+  DedaCode SFilterIIR                      OK
+  DedaCode Slicer                          NO AUDIO
+  DedaCode StereoGain                      OK
+  DedaCode StereoGain                      OK
+  Devon's Analog Cruncher                  OK
+  Devon's Leslie                           OK
+  Devon's Wahdul                           OK
+  Dex Distortion 1.1                       OK
+  Dex Filtah 2 - V 1.3                     OK
+  Dex MultiComp                            OK
+  Dex Volumina                             OK
+  Dimage's Detonator                       OK
+  Dimage's Exponent Distortion             NO AUDIO
+  Dimage's Hy Distortion                   OK
+  Dimage's Sinus Distortion                OK
+  DocBexter BuzzRizer V2.0                 OK
+  DocBexter'S PhaZaR                       OK
+  DocBexter's Neural Net FX 1              OK
+  Edsca Migraine                           OK
+  Elak Dist 2                              OK
+  Elenzil Amplitude Modulator              OK
+  FM-Distortion                            OK
+  FSM Chorus                               OK
+  FSM PanzerDelay                          OK
+  FSM PhatMan                              OK
+  FSM Philta                               OK
+  FSM Philthy                              OK
+  FSM ScatMan                              OK
+  FSM ScrapMan                             OK
+  FSM SprayMan                             OK
+  FSM TunaMan                              OK
+  FSM TunaMan                              OK
+  FSM WahMan                               OK
+  FSM WahMan Pro 2                         OK
+  FSM WahMan Pro 2                         OK
+  FUK O-Delay                              OK
+  FUK Power Boost                          OK
+  FUK Stereo Vibe                          OK
+  Filtro Promediador                       OK
+  Filtro de Mediana                        OK
+  FireSledge Pampurfe                      OK
+  FireSledge ParamEQ                       OK
+  Frequency UnKnown 20dB Boost             OK
+  Frequency UnKnown Absolut                OK
+  Frequency UnKnown Asymmetric             OK
+  Frequency UnKnown Bender                 OK
+  Frequency UnKnown Class B                OK
+  Frequency UnKnown THCMA                  OK
+  Fuzzpilz Chorpse                         OK
+  Fuzzpilz Chorpse Senior                  OK
+  Fuzzpilz Clipper                         OK
+  Fuzzpilz Drink                           OK
+  Fuzzpilz Eff Emm                         OK
+  Fuzzpilz Food                            OK
+  Fuzzpilz Knusprig                        OK
+  Fuzzpilz LRMS                            OK
+  Fuzzpilz Lepidopterist                   OK
+  Fuzzpilz Multibandit                     OK
+  Fuzzpilz Oppressor 3                     OK
+  Fuzzpilz Pottwal                         OK
+  Fuzzpilz Rosengarten                     NO AUDIO
+  Fuzzpilz UnwieldyDelay II                OK
+  Fuzzpilz UnwieldyDist                    OK
+  Fuzzpilz UnwieldyPitch                   OK
+  GenRe - General Retrigger Machine        OK
+  Geonik's 2p Filter                       OK
+  Geonik's Amplitude Modulation            OK
+  Geonik's AutoPan                         OK
+  Geonik's Compressor                      OK
+  Geonik's DF Filter                       OK
+  Geonik's Dolby Surround                  OK
+  Geonik's Expression                      OK
+  Geonik's Gapper                          OK
+  Geonik's Gate                            OK
+  Geonik's Overdrive                       OK
+  Geonik's Overdrive 2                     OK
+  Geonik's Resonator                       OK
+  Geonik's Saturator                       OK
+  HD 2p-SpecFilter  (#phatbuzz@Efnet / hdd@nm.ru)   OK
+  HD COmbO Delay  (hd.gut.ru - hdd@nm.ru)   OK
+  HD ChorD  (hd.gut.ru - hdd@nm.ru)        OK
+  HD Easy_Filter                           OK
+  HD F-Flanger   hd.gut.ru                 OK
+  HD HALYverb  (hd.gut.ru - hdd@nm.ru)     OK
+  HD J-Flanger   ha.ozz.ru                 OK
+  HD Limiter Quad 4.1 (hd.gut.ru - hdd@nm.ru)  OK
+  HD Limiter Quad 4.1.2 (hd.gut.ru - hdd@nm.ru)  OK
+  HD Mod-X  [ www.haldreamer.com / IRC: #phatbuzz @ EFnet ]   OK
+  HD Modulation  (www.HalDreamer.com / hdd@nm.ru)   OK
+  HD Saturation  (hd.gut.ru - hdd@nm.ru)   OK
+  Harcs Signal Analyser                    OK
+  Harcs Vision                             OK
+  Hoester Groove Box                       OK
+  IX Strip 1.0b                            OK
+  Intoxicat Dub Delay                      OK
+  J.R. BP V1 Filter                        OK
+  J.R. BP V2 Filter                        OK
+  J.R. HP Filter                           OK
+  J.R. LP Filter                           OK
+  J.R. Notch Filter                        OK
+  JRm Ringo                                OK
+  Jeskola 3210                             OK
+  Jeskola Chorus                           OK
+  Jeskola Delay                            OK
+  Jeskola Distortion                       OK
+  Jeskola EQ-3                             OK
+  Jeskola Filter                           OK
+  Jeskola Filter 2                         OK
+  Jeskola Flanger                          OK
+  Jeskola Karhu                            OK
+  Jeskola Limiter                          OK
+  Jeskola Raverb                           OK
+  Jeskola Tube Amp                         OK
+  Joachims ChannelStrip v0.4               OK
+  Joachims Chopper v1.1                    OK
+  Joachims DeNoiser                        OK
+  Joachims DeepPan                         OK
+  Joachims Hyperion v1.0                   OK
+  Joachims Jupiter v2                      OK
+  Joachims Limiter v3                      OK
+  Joachims Linkwitz-Riley v1.0             OK
+  Joachims Mars filter v2.2                OK
+  Joachims Mercury filter                  OK
+  Joachims Multi v2                        OK
+  Joachims Neptune v1                      OK
+  Joachims Overdrive                       OK
+  Joachims Pluto v1.3n                     OK
+  Joachims PowerPan                        OK
+  Joachims Saturn v1.1                     OK
+  Joachims Temperature                     OK
+  Joachims Tethys v1.3                     OK
+  Joachims Uranus v0.6 beta                OK
+  Joystick Filter 1                        NO AUDIO
+  KBP's Reversor                           OK
+  Komi::Chaoticon !                        OK
+  Kozaluss Noizza                          OK
+  KrimZon NocturnalTransmitter v1.1.0      OK
+  LD Declicker v1.0.3                      OK
+  LarsHa Funkyverb                         OK
+  LarsHaKa rIDMa                           OK
+  LazyPanner                               OK
+  LdC Automax                              OK
+  LdC Destroyer                            OK
+  LdC Trigger                              OK
+  Lost_Bit iPan                            LOAD FAIL
+  Lost_Bit improved MoDulator              OK
+  Lysergia Gapper                          OK
+  MT Side Chain                            OK
+  MadBrain's LeeterDrive                   OK
+  MadBrain's NeaterDrive                   OK
+  MadBrain's Unsign                        OK
+  Mixer                                    OK
+  Morex 32-Bit Stereo Wave Out             OK
+  Muon Delay                               OK
+  Nafai's fSwitch                          OK
+  Negative                                 OK
+  Ninereeds Fractal v1.0                   OK
+  Ninereeds Pulsify v1.0                   OK
+  Numbird                                  OK
+  Offset Eq                                OK
+  Oomek Exciter                            OK
+  Oomek Masterizer                         OK
+  PSI Corp's LFO Filter                    OK
+  PSI KRAFT! (2.0)                         OK
+  Q Brainwaves                             OK
+  Q Watah                                  OK
+  Q Zfilter                                OK
+  Q-Rebond                                 OK
+  QuadSlice                                OK
+  Revolver3                                OK
+  Revolver5                                OK
+  Revolver7                                OK
+  Revolver9                                OK
+  RnR Distortion                           OK
+  Rout Splitter                            OK
+  Rout Vibrato                             OK
+  Rymix FlaserBox                          OK
+  Rymix StereoBox                          OK
+  Rymix StereoBox Pro                      OK
+  SVF Filter                               OK
+  Savages SGap                             OK
+  Scoofster SV Filter                      NO AUDIO
+  Sgorpi MultiTrack Writer                 NO AUDIO
+  Sonic Verb                               OK
+  Spy SoundTrack                           OK
+  Static Duafilt                           OK
+  Static Duafilt II                        OK
+  Static Peak EQ                           OK
+  Static Phaser                            OK
+  Static Sensonic                          OK
+  THC 8 Tap Stereo Delay                   OK
+  THC Dolby Proliogic with Echo            OK
+  Tic-Tac aBuffer                          OK
+  Vinje Delay 1.0                          OK
+  Vinje I 1.1                              OK
+  Vinje II 1.0                             OK
+  WhiteNoise Chorus                        OK
+  WhiteNoise Fuzzbox                       OK
+  WhiteNoise Gate                          OK
+  WhiteNoise Pixelate                      OK
+  WhiteNoise Recorder                      OK
+  WhiteNoise Ringmod                       OK
+  WhiteNoise Stereo Mod                    OK
+  WhiteNoise Stereo-dist                   OK
+  WhiteNoise Stutter                       TIMEOUT (10s)
+  WhiteNoise Verb                          OK
+  WhiteNoise's Filtron                     OK
+  WhiteNoise's Harmonic Delay              TIMEOUT (10s)
+  WhiteNoise's HiFiltron                   OK
+  Ynzn's 3D Fx Simulator                   OK
+  ZWAR's Swapper                           OK
+  ZWAR's Swapper                           OK
+  Zephod ADSR                              OK
+  Zephod ADSRfilter                        OK
+  Zephod Autopan                           OK
+  Zephod Blue Filter                       OK
+  Zephod EKKY                              OK
+  Zephod Enveloper                         OK
+  Zephod Freefilter                        NO AUDIO
+  Zephod GAIN                              OK
+  Zephod Green Filter                      OK
+  Zephod ITCH!                             OK
+  Zephod MoogFiltah                        NO AUDIO
+  Zephod Orange Filter                     OK
+  Zephod PAN                               OK
+  Zephod PolyWog 22                        OK
+  Zephod ReSaw                             OK
+  Zephod SPREAD                            OK
+  Zephod Scope                             OK
+  Zephod WUZZ                              OK
+  Zephod Waveshaper                        OK
+  Zephod Yellow Filter                     OK
+  Zephods Paniq!                           OK
+  Zephods gurufilter                       OK
+  Zu Parametric EQ                         OK
+  Zu Slicer                                OK
+  Zu Tube Head                             OK
+  Zu µTaps                                 OK
+  aNEurYSm DistGarb                        OK
+  asedev Gain01                            OK
+  asedev Gain02                            OK
+  asedev Gain03                            OK
+  asedev HumanM01                          OK
+  asedev HumanS01                          OK
+  asedev Psycho01                          OK
+  asedev a2pFilter01                       OK
+  asedev a2pFilter03                       OK
+  asedev a2pFilter04                       OK
+  asedev a4pFilter01                       OK
+  asedev a4pFilter03                       OK
+  asedev a4pFilter04                       OK
+  asedev aEcho01                           OK
+  asedev aReverb01                         OK
+  asedev sSpread01                         OK
+  cheapo amp                               OK
+  cheapo crusty clipper                    OK
+  cheapo dc                                OK
+  cheapo do-nothing                        OK
+  cheapo fixer                             OK
+  cheapo fixer pro                         OK
+  cheapo negative                          OK
+  cheapo spread                            OK
+  cheapo statistics                        OK
+  cheapo stereo xfade                      OK
+  cheapo stimulation                       OK
+  chrisisasavage Skweeler                  OK
+  edexters logriser                        OK
+  glow sidfilter                           NO AUDIO
+  kazuya Mandala                           OK
+  kazuya SineMod                           OK
+  kazuya SineRing                          OK
+  kazuya StereoAutoGain                    OK
+  kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
+  kibibu Channel Swap                      OK
+  kibibu Convolver7                        OK
+  kibibu Inversor                          OK
+  kibibu Left                              OK
+  kibibu MidSide to Stereo                 OK
+  kibibu MultiMerge                        OK
+  kibibu Revolving Pan                     OK
+  kibibu Revolving Pan with LFO            OK
+  kibibu Right                             OK
+  kibibu Simple Pan                        OK
+  kibibu Stereo Width                      OK
+  kibibu Stereo to MidSide                 OK
+  ld bandfilter                            OK
+  ld latedist                              OK
+  ld pfilter                               OK
+  ld pipedelay                             OK
+  ld stereo sh                             OK
+  ld transient2                            OK
+  ld zdelay                                OK
+  paniq & zephod's ventilator              OK
+  rDev Software AutoGain                   OK
+  rDev Trianglular Energy Limiter          OK
+  smartelectronix tubescreamer             NO AUDIO
+  synopia 3Dizer Buffer Control            NO OUTPUT
+  synopia EAX2.0 Output                    NO AUDIO
+  tonIO                                    OK
+  vII Graphity                             NO AUDIO
+  11-FM v1.0                               OK
+  Analog Distortion                        OK
+  BTDSys SampleGrid Out                    OK
+  Bigyo 2p Filter                          OK
+  Fuzzpilz Otter                           OK
+  Intoxicat Grain Delay                    OK
+  Morex 32-Bit Stereo Wave In              OK
+  Zephod FFTsynth                          NO AUDIO
+  ld grain fx                              OK
+
+========================================
+Results: 404/438 passed (21 no-output, 44 silent excluded)
+  Audio OK:    404
+  No audio:    26  (Work returned true but buffer was zero)
+  Silent:      44  (Work never returned true â€” likely control-only)
+  No output:   21  (flagged MIF_NO_OUTPUT/MIF_CONTROL_MACHINE)
+  Load failed: 1
+  Init failed: 2
+  Crashed:     2
+  Timed out:   3
+========================================
+
+Failed machines:
+  [GEN] CyanPhase DTMF-1                         NO AUDIO
+  [GEN] Geonik's Omega-1                         NO AUDIO
+  [GEN] HD <(Gen_Station_Ultra_Professional+)>   NO AUDIO
+  [GEN] HD_REAL_3O3_(beta_ver)_How_like_this?_;)... NO AUDIO
+  [GEN] Harcs WARP                               NO AUDIO
+  [GEN] Sgorpi's Mean Bassdrum Machine           ERROR
+  [GEN] WhiteNoise Scratcher                     NO AUDIO
+  [GEN] Zephod Blok2009                          ERROR
+  [GEN] cmx Wacko v0.01beta                      NO AUDIO
+  [GEN] farbrausch V2                            INIT
+  [GEN] farbrausch V2                            INIT
+  [GEN] ld jacinth2                              NO AUDIO
+  [FX] Automaton 2-pole                         NO AUDIO
+  [FX] Automaton Parametric EQ                  NO AUDIO
+  [FX] Chun-Yu's TouchWah                       NO AUDIO
+  [FX] CyanPhase DMO Adapter                    TIMEOUT
+  [FX] CyanPhase M-Integral 2                   NO AUDIO
+  [FX] DedaCode Slicer                          NO AUDIO
+  [FX] Dimage's Exponent Distortion             NO AUDIO
+  [FX] Fuzzpilz Rosengarten                     NO AUDIO
+  [FX] Joystick Filter 1                        NO AUDIO
+  [FX] Lost_Bit iPan                            LOAD
+  [FX] Scoofster SV Filter                      NO AUDIO
+  [FX] Sgorpi MultiTrack Writer                 NO AUDIO
+  [FX] WhiteNoise Stutter                       TIMEOUT
+  [FX] WhiteNoise's Harmonic Delay              TIMEOUT
+  [FX] Zephod Freefilter                        NO AUDIO
+  [FX] Zephod MoogFiltah                        NO AUDIO
+  [FX] glow sidfilter                           NO AUDIO
+  [FX] kazuya VocalCancel [works ONLY in STEREO mode] NO AUDIO
+  [FX] smartelectronix tubescreamer             NO AUDIO
+  [FX] synopia EAX2.0 Output                    NO AUDIO
+  [FX] vII Graphity                             NO AUDIO
+  [FX] Zephod FFTsynth                          NO AUDIO

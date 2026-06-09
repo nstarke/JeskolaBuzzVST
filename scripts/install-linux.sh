@@ -2,11 +2,11 @@
 # BuzzBridge Linux installer.
 #
 # This script is shipped inside the BuzzBridge-Linux-<version>.tar.gz release
-# tarball next to BuzzBridge.vst3. Run it after extracting:
+# tarball next to BuzzBridge.vst3 as `installer.sh`. Run it after extracting:
 #
 #     tar xf BuzzBridge-Linux-v1.0.0.tar.gz
 #     cd BuzzBridge-Linux-v1.0.0
-#     ./install.sh
+#     ./installer.sh
 #
 # What it does:
 #   1. Copies BuzzBridge.vst3 into a dedicated directory under your home
