@@ -2,6 +2,7 @@
 #include "GearScanner.h"
 #include "../buzz/MachineInterface.h"
 #include "../common/SEHGuard.h"
+#include "../common/PatchMessageBoxes.h"
 
 #include <algorithm>
 #include <cstring>
@@ -12,6 +13,11 @@ typedef CMachineInfo const* (__cdecl *GetInfoFunc)();
 
 bool GearScanner::Scan(const std::string& gearDir)
 {
+	// Neutralize MessageBox popups before probing any machine DLL — some
+	// machines call MessageBox from DllMain/GetInfo (e.g. a "GetInfo() Called"
+	// debug dialog) which would otherwise block the host's plugin scan.
+	PatchMessageBoxesOnce();
+
 	entries.clear();
 
 	if (gearDir.empty()) return false;

@@ -29,4 +29,13 @@ inline void PatchMessageBoxes() {
     }
 }
 
+// Patch MessageBoxA/W exactly once per process. Safe to call from any of the
+// machine-DLL entry points (scan, load, controller info-load); the first call
+// installs the no-op stub and the rest are cheap no-ops. Uses a C++11 magic
+// static so initialization is thread-safe.
+inline void PatchMessageBoxesOnce() {
+    static bool done = (PatchMessageBoxes(), true);
+    (void)done;
+}
+
 } // namespace BuzzVst

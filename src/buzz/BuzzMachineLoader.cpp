@@ -2,6 +2,7 @@
 #include "BuzzMachineLoader.h"
 #include "BuzzMachineQuirks.h"
 #include "../common/SEHGuard.h"
+#include "../common/PatchMessageBoxes.h"
 #include <cstring>
 #include <cstdio>
 
@@ -91,6 +92,9 @@ bool BuzzMachineLoader::ValidateInfo(const CMachineInfo* info) const
 
 bool BuzzMachineLoader::Load(const char* dllPath)
 {
+	// Suppress machine MessageBox popups before LoadLibrary runs their DllMain.
+	PatchMessageBoxesOnce();
+
 	Unload();
 	faulted = false;
 

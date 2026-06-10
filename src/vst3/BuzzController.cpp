@@ -4,6 +4,7 @@
 #include "ParameterMapping.h"
 #include "../buzz/BuzzPresetLoader.h"
 #include "../common/SEHGuard.h"
+#include "../common/PatchMessageBoxes.h"
 
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/base/ustring.h"
@@ -924,6 +925,9 @@ void BuzzController::resetParameters()
 
 bool BuzzController::loadMachineParameters(const std::string& path)
 {
+	// Suppress machine MessageBox popups before LoadLibrary runs their DllMain.
+	PatchMessageBoxesOnce();
+
 	// Reset existing parameters to hidden
 	resetParameters();
 
