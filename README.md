@@ -135,7 +135,7 @@ You do not need the 64-bit bridge host (`BuzzBridgeHost32.exe`) on Linux — yab
 ### Requirements
 
 - Linux (or WSL2) with `bash`, `cmake` ≥ 3.25, `ninja`, `git`, `curl`, `tar`
-- [WINE](https://www.winehq.org/) (any recent version)
+- [WINE](https://www.winehq.org/) **with 32-bit support** — the bridge is a 32-bit plugin and needs a 32-bit WINE loader and a win32 prefix (the installer sets this up; see [WINE 32-bit prefix and runtime](#wine-32-bit-prefix-and-runtime-environment))
 - [yabridge](https://github.com/robbert-vdh/yabridge) + `yabridgectl` (for installing into DAWs)
 - A Linux-native VST3 host (Bitwig Studio, Reaper, Ardour, Carla, etc.)
 
@@ -186,22 +186,61 @@ cd BuzzBridge-Linux-vX.Y.Z
 ./installer.sh
 ```
 
-The installer copies `BuzzBridge.vst3` to `~/.local/share/BuzzBridge/`, registers that directory with `yabridgectl`, and runs `yabridgectl sync` to generate the native Linux VST3 shim. It then prompts you to download the Buzz machine database (~30 MB, 726 machines) and extract it to `$HOME/Buzz/Gear`.
+The installer:
+
+1. **Installs system dependencies.** It detects your package manager (`apt`/`dnf`/`zypper`/`pacman`) and offers to install WINE *with 32-bit support* plus `curl`/`unzip` (it prompts before running `sudo`). yabridge itself is not in most distro repos and is not auto-installed — install it from [its releases](https://github.com/robbert-vdh/yabridge) if `yabridgectl` is missing.
+2. Copies `BuzzBridge.vst3` to `~/.local/share/BuzzBridge/`, registers it with `yabridgectl`, runs `yabridgectl sync`, and symlinks the generated shim into the top of `~/.vst3/` so non-recursive hosts (e.g. Renoise) find it.
+3. **Sets up the WINE runtime** — creates a dedicated 32-bit (win32) prefix and writes the needed env vars to your shell rc. See [WINE 32-bit prefix and runtime](#wine-32-bit-prefix-and-runtime-environment) below.
+4. Prompts to download the Buzz machine database (~30 MB, 726 machines) and extract it to `$HOME/Buzz/Gear`.
 
 Options:
 
 ```bash
+./installer.sh --deps             # install system packages without prompting
+./installer.sh --no-deps          # skip the system dependency step
+./installer.sh --wine-env         # write WINE runtime env to shell rc without prompting
+./installer.sh --no-wine-env      # skip the win32-prefix / shell-rc step
 ./installer.sh --with-machines    # install machine DB without prompting
-./installer.sh --no-machines      # skip machine DB without prompting
+./installer.sh --no-machines      # skip machine DB download without prompting
 ```
 
-Override the install location with `BUZZVST_INSTALL_DIR=/custom/path ./installer.sh`.
+Overrides: `BUZZVST_INSTALL_DIR` (plugin dir), `BUZZVST_WINEPREFIX` (win32 prefix, default `~/.wine-buzz32`), `BUZZVST_RC_FILE` (which rc file to edit), `BUZZVST_GEAR_DIR` (machine dir).
 
-To uninstall:
+To uninstall (also removes the shell-rc env block; leaves the win32 prefix in place):
 
 ```bash
 ./uninstall.sh
 ```
+
+### WINE 32-bit prefix and runtime environment
+
+BuzzBridge is a **32-bit** Windows VST3, so yabridge runs it through its 32-bit host (`yabridge-host-32.exe`). That host has two hard requirements that a default desktop WINE setup often does not meet:
+
+- **A 32-bit (win32) WINE prefix.** A normal `~/.wine` is a 64-bit (win64) prefix, and a 32-bit wineserver cannot drive it (`wine: '~/.wine' is a 64-bit installation, it cannot be used with a 32-bit wineserver`). The installer therefore creates a separate prefix at **`~/.wine-buzz32`** (override with `BUZZVST_WINEPREFIX`) and points the bridge at it via `WINEPREFIX`. Your main `~/.wine` is left untouched.
+- **A 32-bit WINE loader, on new-WoW64 builds.** Recent distro WINE (e.g. Ubuntu's `wine-stable` 10.x) defaults to a 64-bit/WoW64-only `wine` that cannot launch the 32-bit *winelib* host at all (`wine: failed to start ...yabridge-host-32.exe.so`). When the installer detects this, it sets `WINELOADER` to the distro's 32-bit loader (e.g. `/usr/lib/i386-linux-gnu/wine/wine`). On WINE builds where the default `wine` already runs the 32-bit host, `WINELOADER` is left unset.
+
+The installer writes these into a clearly marked block in your shell rc (`~/.bashrc`, `~/.zshrc`, or `~/.profile` depending on `$SHELL`):
+
+```bash
+# >>> BuzzBridge (yabridge 32-bit runtime) >>>
+export WINEPREFIX="$HOME/.wine-buzz32"
+export WINELOADER="/usr/lib/i386-linux-gnu/wine/wine"   # only if your wine is 64-bit/WoW64-only
+export BUZZVST_GEAR_DIR='Z:\home\you\Buzz\Gear'
+# <<< BuzzBridge (yabridge 32-bit runtime) <<<
+```
+
+It is **idempotent**: an existing BuzzBridge block is left untouched if unchanged, refreshed if its values changed, and skipped (with a warning) if you already export `WINEPREFIX`/`WINELOADER` yourself elsewhere in the file.
+
+> ⚠️ **`WINEPREFIX`/`WINELOADER` are global.** Any shell that sources this rc file will use the 32-bit prefix/loader for *every* `wine` command, which can break other 64-bit Windows apps you run under WINE. If you use WINE for other things, remove the block (or run `./uninstall.sh`) and instead launch only your DAW with these vars set — for example via a small wrapper:
+>
+> ```bash
+> #!/bin/sh
+> exec env WINEPREFIX="$HOME/.wine-buzz32" \
+>          WINELOADER=/usr/lib/i386-linux-gnu/wine/wine \
+>          renoise "$@"
+> ```
+
+After the installer writes the rc block, open a new terminal (or `source` the rc file) before launching your DAW from a shell, then rescan plugins.
 
 ### Pointing at your Buzz machines
 

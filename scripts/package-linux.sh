@@ -49,11 +49,15 @@ MDB_URL=""
 if [[ "${VERSION}" =~ ^v[0-9] ]]; then
     MDB_URL="https://github.com/nstarke/JeskolaBuzzVST/releases/download/${VERSION}/mdb_machines.zip"
 fi
+# Substitute ONLY the assignment line (anchored on `MDB_URL="@MDB_URL@"`), not
+# every occurrence. installer.sh also references the @MDB_URL@ token inside its
+# "was this substituted?" guard; a global replace would clobber that too and
+# make the guard always fire, breaking the machine-DB download on real releases.
 # macOS sed needs the backup arg; GNU sed does not. Handle both.
 if sed --version >/dev/null 2>&1; then
-    sed -i "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/installer.sh"
+    sed -i "s|^MDB_URL=\"@MDB_URL@\"|MDB_URL=\"${MDB_URL}\"|" "${STAGING}/installer.sh"
 else
-    sed -i '' "s|@MDB_URL@|${MDB_URL}|g" "${STAGING}/installer.sh"
+    sed -i '' "s|^MDB_URL=\"@MDB_URL@\"|MDB_URL=\"${MDB_URL}\"|" "${STAGING}/installer.sh"
 fi
 
 cat > "${STAGING}/README.txt" <<EOF
