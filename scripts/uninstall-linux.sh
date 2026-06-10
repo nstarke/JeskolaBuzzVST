@@ -26,6 +26,17 @@ for rc in "${BUZZVST_RC_FILE:-}" "${HOME}/.bashrc" "${HOME}/.zshrc" "${HOME}/.pr
     fi
 done
 
+# Remove the systemd graphical-session env file install.sh wrote so desktop-
+# launched DAWs could find the bridge, and drop the vars from the live session.
+SESSION_ENV_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/environment.d/buzzbridge.conf"
+if [[ -f "${SESSION_ENV_FILE}" ]]; then
+    rm -f "${SESSION_ENV_FILE}"
+    echo "[BuzzBridge] Removed graphical-session env file: ${SESSION_ENV_FILE}"
+fi
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user unset-environment WINEPREFIX WINELOADER BUZZVST_GEAR_DIR 2>/dev/null || true
+fi
+
 if command -v yabridgectl >/dev/null 2>&1; then
     # Remove the top-level convenience symlink created by install.sh before
     # syncing (after sync the shim it points at is gone, leaving it dangling).

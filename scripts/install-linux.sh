@@ -43,7 +43,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_FILE="${SCRIPT_DIR}/BuzzBridge.vst3"
 INSTALL_DIR="${BUZZVST_INSTALL_DIR:-${HOME}/.local/share/BuzzBridge}"
-GEAR_DIR="${BUZZVST_GEAR_DIR:-${HOME}/Buzz/Gear}"
 
 # BuzzBridge is a 32-bit plugin, so yabridge's 32-bit host needs a 32-bit (win32)
 # WINE prefix; a normal 64-bit ~/.wine prefix cannot be driven by a 32-bit
@@ -55,6 +54,31 @@ WINEPREFIX_BUZZ="${BUZZVST_WINEPREFIX:-${HOME}/.wine-buzz32}"
 # native gear directory from inside the prefix.
 linux_user="${USER:-$(id -un)}"
 wine_gear_path="Z:\\home\\${linux_user}\\Buzz\\Gear"
+
+# Translate a WINE/Windows-style path (e.g. Z:\home\you\Buzz\Gear) into a native
+# Linux path. The plugin reads $BUZZVST_GEAR_DIR as a WINE path, so users who
+# follow the README export a Z:\... value; but here we need a real Linux path to
+# extract into. Z:\ is WINE's mapping for the Linux root ('/'); other drive
+# letters fall back to `winepath` when available.
+wine_path_to_unix() {
+    local p="$1"
+    case "${p}" in
+        [Zz]:[\\/]*) p="/${p:3}" ;;
+        [A-Za-z]:[\\/]*)
+            if command -v winepath >/dev/null 2>&1; then
+                p="$(WINEPREFIX="${WINEPREFIX_BUZZ}" winepath -u "${p}" 2>/dev/null || printf '%s' "${p}")"
+            fi
+            ;;
+    esac
+    printf '%s' "${p//\\//}"
+}
+
+# GEAR_DIR is the native Linux directory we download/extract machines into.
+if [[ -n "${BUZZVST_GEAR_DIR:-}" ]]; then
+    GEAR_DIR="$(wine_path_to_unix "${BUZZVST_GEAR_DIR}")"
+else
+    GEAR_DIR="${HOME}/Buzz/Gear"
+fi
 
 # Release asset URL for the machine database. @MDB_URL@ is substituted by
 # scripts/package-linux.sh at tarball build time with the version-pinned
@@ -110,6 +134,7 @@ install_system_deps() {
     command -v wine  >/dev/null 2>&1 || missing+=("wine")
     have_32bit_wine                  || missing+=("wine(32-bit support)")
     command -v unzip >/dev/null 2>&1 || missing+=("unzip")
+    command -v cabextract >/dev/null 2>&1 || missing+=("cabextract")
     { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; } || missing+=("curl")
 
     if [[ ${#missing[@]} -eq 0 ]]; then
@@ -132,16 +157,16 @@ install_system_deps() {
             cmds=(
                 "sudo dpkg --add-architecture i386"
                 "sudo apt-get update"
-                "sudo apt-get install -y wine wine32:i386 wine64 curl unzip"
+                "sudo apt-get install -y wine wine32:i386 wine64 curl unzip cabextract"
             ) ;;
         dnf)
-            cmds=( "sudo dnf install -y wine wine-core.i686 curl unzip" ) ;;
+            cmds=( "sudo dnf install -y wine wine-core.i686 curl unzip cabextract" ) ;;
         zypper)
-            cmds=( "sudo zypper install -y wine wine-32bit curl unzip" ) ;;
+            cmds=( "sudo zypper install -y wine wine-32bit curl unzip cabextract" ) ;;
         pacman)
             echo "[BuzzBridge] NOTE: 32-bit WINE on Arch requires the [multilib] repo"
             echo "    enabled in /etc/pacman.conf (uncomment the [multilib] section)."
-            cmds=( "sudo pacman -S --needed --noconfirm wine curl unzip" ) ;;
+            cmds=( "sudo pacman -S --needed --noconfirm wine curl unzip cabextract" ) ;;
     esac
 
     echo
@@ -283,6 +308,149 @@ ${RC_END}"
     WROTE_RC="$rc"
 }
 
+# Path of the systemd user environment file we manage.
+SESSION_ENV_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/environment.d/buzzbridge.conf"
+
+# The shell rc block from write_wine_env only reaches DAWs started from a
+# terminal -- graphical launchers (desktop icons, app menus) do NOT source
+# ~/.bashrc, so a desktop-launched DAW runs the bridge against the default
+# 64-bit ~/.wine prefix with no 32-bit loader and the host fails to start.
+# systemd imports ~/.config/environment.d/*.conf into the graphical session at
+# login, so writing the same vars there makes desktop launches work too. Also
+# pushes them into the *current* session so the user can test without a full
+# re-login. Idempotent: the file is ours alone and is simply rewritten.
+write_session_env() { # $1=prefix $2=loader(maybe empty)
+    command -v systemctl >/dev/null 2>&1 || return 0  # not a systemd session; nothing reads environment.d
+
+    mkdir -p "$(dirname "${SESSION_ENV_FILE}")" 2>/dev/null || {
+        echo "WARNING: cannot create $(dirname "${SESSION_ENV_FILE}"); desktop-launched DAWs may not find the bridge." >&2
+        return 0
+    }
+
+    # environment.d is VAR=VALUE (no 'export', no shell quoting). Values are
+    # literal aside from ${VAR} expansion; our paths contain no '$'.
+    {
+        echo "# Added by BuzzBridge installer.sh so DAWs launched from the desktop/menu"
+        echo "# (not a terminal) inherit the WINE runtime the 32-bit yabridge host needs."
+        echo "# ~/.bashrc is NOT read by graphical launchers; this file is. systemd imports"
+        echo "# it into the graphical session at login."
+        echo "#"
+        echo "# WARNING: these WINE vars are GLOBAL for the graphical session and affect"
+        echo "# every other Windows app you run under wine. Delete this file (or run"
+        echo "# uninstall.sh) if that is a problem."
+        echo "WINEPREFIX=$1"
+        [ -n "$2" ] && echo "WINELOADER=$2"
+        echo "BUZZVST_GEAR_DIR=${wine_gear_path}"
+    } > "${SESSION_ENV_FILE}"
+    echo "[BuzzBridge] Wrote graphical-session WINE env to ${SESSION_ENV_FILE}."
+
+    # Make it live for the running session so a desktop launch works now; the
+    # file makes it permanent after the next login.
+    if [ -n "$2" ]; then
+        systemctl --user set-environment "WINEPREFIX=$1" "WINELOADER=$2" "BUZZVST_GEAR_DIR=${wine_gear_path}" 2>/dev/null \
+            && echo "    Applied to the current session; full effect after next login." \
+            || echo "    Will take effect after your next login."
+    else
+        systemctl --user set-environment "WINEPREFIX=$1" "BUZZVST_GEAR_DIR=${wine_gear_path}" 2>/dev/null \
+            && echo "    Applied to the current session; full effect after next login." \
+            || echo "    Will take effect after your next login."
+    fi
+    WROTE_SESSION_ENV="${SESSION_ENV_FILE}"
+}
+
+# Set the prefix's LogPixels (screen DPI) to match the host display so the
+# plugin editor self-scales on HiDPI screens. $1=prefix $2=loader(may be empty).
+configure_prefix_dpi() {
+    local prefix="$1" loader="$2" dpi=""
+
+    # Prefer Xft.dpi from the X resource database; it already reflects the
+    # desktop scale (e.g. 192 at 200%). Ignore values <= 96 (no scaling needed).
+    if command -v xrdb >/dev/null 2>&1; then
+        dpi="$(xrdb -query 2>/dev/null | awk -F'[:\t ]+' '/^Xft.dpi:/{print $2; exit}')"
+    fi
+    case "${dpi}" in
+        ''|*[!0-9]*) dpi=96 ;;            # missing or non-numeric -> default
+    esac
+    [[ "${dpi}" -lt 96 ]] && dpi=96
+
+    echo "[BuzzBridge] Setting WINE prefix LogPixels to ${dpi} (host display DPI) ..."
+    if [[ -n "${loader}" ]]; then
+        WINEDEBUG=-all WINEPREFIX="${prefix}" WINELOADER="${loader}" "${loader}" \
+            reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d "${dpi}" /f >/dev/null 2>&1 || true
+    else
+        WINEDEBUG=-all WINEPREFIX="${prefix}" \
+            wine reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d "${dpi}" /f >/dev/null 2>&1 || true
+    fi
+}
+
+# Install mfc42.dll into the prefix. WINE does not ship MFC, and a number of
+# classic Buzz machines import it — Auxbus.dll (and through it the whole aux
+# family: CyanPhase AuxReturn/Sea Cucumber, the Dex machines, FireSledge
+# Antiope-1, Fuzzpilz RO-BOT/UnwieldyDelay3, Jeskola AuxSend, ...), Geonik's
+# Visualization and Frequency UnKnown Freq Out among others. Without it those
+# machines silently fail to load and are simply missing from songs. The DLLs
+# are pulled from Microsoft's freely redistributable VC6 redist (same source
+# and checksum as winetricks' vcrun6 verb) and extracted with cabextract — no
+# wine invocation needed, so this works even where the host wine refuses to
+# run tools in a win32 prefix. $1=prefix
+VC6_REDIST_URL="https://download.microsoft.com/download/vc60pro/Update/2/W9XNT4/EN-US/VC6RedistSetup_deu.exe"
+VC6_REDIST_SHA256="c2eb91d9c4448d50e46a32fecbcc3b418706d002beab9b5f4981de552098cee7"
+
+install_mfc42() {
+    local prefix="$1"
+    local sys32="${prefix}/drive_c/windows/system32"
+
+    if [[ -f "${sys32}/mfc42.dll" ]]; then
+        echo "[BuzzBridge] mfc42.dll already present in the prefix."
+        return 0
+    fi
+    if [[ ! -d "${sys32}" ]]; then
+        echo "WARNING: ${sys32} not found; skipping mfc42 install." >&2
+        return 0
+    fi
+    if ! command -v cabextract >/dev/null 2>&1; then
+        echo "WARNING: cabextract not found; cannot install mfc42.dll." >&2
+        echo "  Buzz machines that use MFC (the Auxbus family and others) will not load." >&2
+        echo "  Install cabextract and re-run installer.sh, or run: winetricks mfc42" >&2
+        return 0
+    fi
+
+    echo "[BuzzBridge] Installing mfc42.dll (needed by Auxbus-family Buzz machines) ..."
+    local tmpdir
+    tmpdir="$(mktemp -d)" || return 0
+    local setup_exe="${tmpdir}/VC6RedistSetup.exe"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "${VC6_REDIST_URL}" -o "${setup_exe}" || { echo "WARNING: VC6 redist download failed; skipping mfc42." >&2; rm -rf "${tmpdir}"; return 0; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "${VC6_REDIST_URL}" -O "${setup_exe}" || { echo "WARNING: VC6 redist download failed; skipping mfc42." >&2; rm -rf "${tmpdir}"; return 0; }
+    else
+        echo "WARNING: neither curl nor wget found; skipping mfc42 install." >&2
+        rm -rf "${tmpdir}"
+        return 0
+    fi
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        if ! echo "${VC6_REDIST_SHA256}  ${setup_exe}" | sha256sum -c --quiet - 2>/dev/null; then
+            echo "WARNING: VC6 redist checksum mismatch; not installing mfc42.dll." >&2
+            rm -rf "${tmpdir}"
+            return 0
+        fi
+    fi
+
+    # Two nested self-extracting CABs: setup exe -> vcredist.exe -> mfc42*.dll
+    if cabextract -q -d "${tmpdir}" "${setup_exe}" \
+        && cabextract -q -d "${tmpdir}" -F 'mfc42*.dll' "${tmpdir}/vcredist.exe" \
+        && [[ -f "${tmpdir}/mfc42.dll" ]]; then
+        cp "${tmpdir}/mfc42.dll" "${tmpdir}/mfc42u.dll" "${sys32}/" 2>/dev/null \
+            && echo "[BuzzBridge] Installed mfc42.dll + mfc42u.dll into ${sys32}" \
+            || echo "WARNING: could not copy mfc42 DLLs into ${sys32}." >&2
+    else
+        echo "WARNING: mfc42 extraction failed; Auxbus-family machines will not load." >&2
+    fi
+    rm -rf "${tmpdir}"
+}
+
 # Create the win32 prefix (if needed) and configure the shell rc with the
 # minimal env required to run the 32-bit bridge host.
 configure_wine_runtime() {
@@ -303,6 +471,16 @@ configure_wine_runtime() {
             WINEDEBUG=-all WINEARCH=win32 WINEPREFIX="${prefix}" timeout 180 wine wineboot --init >/dev/null 2>&1 || true
         fi
     fi
+
+    # Match the prefix DPI to the host display so the plugin's editor self-scales
+    # on HiDPI screens. BuzzPluginView::attached() reads GetDeviceCaps(LOGPIXELSX)
+    # (i.e. this LogPixels value) to pick its scale factor; WINE defaults it to 96
+    # (1.0x), which renders a tiny GUI on a 2x display. Derive the value from the
+    # host's Xft.dpi, falling back to 96 when unknown or non-HiDPI.
+    configure_prefix_dpi "${prefix}" "${loader}"
+
+    # Buzz machines built on MFC need mfc42.dll, which WINE doesn't provide.
+    install_mfc42 "${prefix}"
 
     # Determine the minimal env: always WINEPREFIX; add WINELOADER only if the
     # default wine cannot launch the 32-bit host (keeps other wine apps working
@@ -332,6 +510,7 @@ configure_wine_runtime() {
     fi
 
     write_wine_env "${prefix}" "${need_loader}"
+    write_session_env "${prefix}" "${need_loader}"
 }
 
 # --- step 1: install the plugin -------------------------------------------
@@ -381,6 +560,7 @@ fi
 
 # --- step 2.5: wine runtime (win32 prefix + shell rc env) -----------------
 WROTE_RC=""
+WROTE_SESSION_ENV=""
 configure_wine_runtime
 
 # --- step 3: machine database ---------------------------------------------
@@ -458,6 +638,15 @@ Start a new terminal (or 'source ${WROTE_RC}') before launching your DAW from a
 shell so the bridge can start. Note: those WINE vars are global — see the README
 if you also run other Windows apps under wine.
 EOF
+    if [[ -n "${WROTE_SESSION_ENV}" ]]; then
+        cat <<EOF
+For DAWs you launch from the desktop/app menu (which do NOT read ~/.bashrc), the
+same vars were written to:
+  ${WROTE_SESSION_ENV}
+and pushed into your current session. Log out and back in once to make them
+permanent for graphical launches.
+EOF
+    fi
 else
     cat <<EOF
 To run the 32-bit bridge, these need to be set before launching your DAW

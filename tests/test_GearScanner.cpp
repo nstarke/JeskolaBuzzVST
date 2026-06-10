@@ -171,3 +171,59 @@ TEST(GearScanner, SkipsNonMachineDlls) {
 		CHECK_TRUE(entry.machineType == MT_GENERATOR || entry.machineType == MT_EFFECT);
 	}
 }
+
+// ===== Process-wide scan serialization (SharedGearScan.h) =====
+//
+// Concurrent GearScanner::Scan calls in one process deadlock (or crash with
+// no backtrace) inside machine DllMains under the NT loader lock. A DAW
+// restoring a song creates many controller instances in one host process, so
+// every controller scan goes through acquireSharedGearScan, which serializes
+// the scans and shares the results. Regression: concurrent acquires must all
+// complete and agree on the result set.
+
+#include "../src/vst3/SharedGearScan.h"
+#include <thread>
+#include <atomic>
+
+TEST(SharedGearScan, ConcurrentAcquiresAllCompleteAndAgree) {
+	char tmp[MAX_PATH];
+	GetTempPathA(MAX_PATH, tmp);
+	std::string dir = std::string(tmp) + "buzz_sharedscan_fixture";
+	CreateDirectoryA(dir.c_str(), nullptr);
+
+	const int kThreads = 8;
+	std::atomic<int> completed{0};
+	std::vector<size_t> counts(kThreads, (size_t)-1);
+	std::vector<std::thread> threads;
+	for (int i = 0; i < kThreads; i++) {
+		threads.emplace_back([&, i]() {
+			std::vector<GearEntry> out;
+			if (acquireSharedGearScan(dir, out)) {
+				counts[i] = out.size();
+				completed++;
+			}
+		});
+	}
+	for (auto& t : threads) t.join();
+
+	ASSERT_EQ((int)completed, kThreads);
+	for (int i = 1; i < kThreads; i++)
+		CHECK_EQ((int)counts[i], (int)counts[0]);
+
+	RemoveDirectoryA(dir.c_str());
+}
+
+TEST(SharedGearScan, CachedResultReusedForSameDir) {
+	char tmp[MAX_PATH];
+	GetTempPathA(MAX_PATH, tmp);
+	std::string dir = std::string(tmp) + "buzz_sharedscan_fixture2";
+	CreateDirectoryA(dir.c_str(), nullptr);
+
+	std::vector<GearEntry> first, second;
+	ASSERT_TRUE(acquireSharedGearScan(dir, first));
+	// Second acquire must hit the cache (same dir) and agree.
+	ASSERT_TRUE(acquireSharedGearScan(dir, second));
+	ASSERT_EQ((int)second.size(), (int)first.size());
+
+	RemoveDirectoryA(dir.c_str());
+}

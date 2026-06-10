@@ -11,6 +11,8 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "base/source/fstreamer.h"
 
+#include "SharedGearScan.h"
+
 #include <cstring>
 #include <cstdio>
 
@@ -216,6 +218,14 @@ IPlugView* PLUGIN_API BuzzController::createView(const char* name)
 			view->showScanningIndicator();
 		}
 
+		// The host owns the view's lifetime and can destroy it at any moment
+		// (e.g. an editor probe while restoring a song). Drop our raw pointer
+		// the instant it dies, or later view updates dereference freed memory.
+		view->onViewDestroyed = [this, view]() {
+			if (activeView == view)
+				activeView = nullptr;
+		};
+
 		view->onDllSelected = [this](const std::string& path) {
 			onDllPathSelected(path);
 		};
@@ -340,16 +350,9 @@ void BuzzController::scanGearDirectory(const std::string& path)
 
 	if (path.empty()) return;
 
-	GearScanner scanner;
-	if (scanner.Scan(path)) {
-		// Filter control/no-output helpers (MIDI out, positional-audio listeners,
-		// transport sync hacks). These declare MIF_NO_OUTPUT / MIF_CONTROL_MACHINE
-		// and produce no audio by design — they shouldn't appear in the gear list.
-		for (auto& e : scanner.GetEntries()) {
-			if (e.flags & (MIF_NO_OUTPUT | MIF_CONTROL_MACHINE)) continue;
-			scannedMachines.push_back(e);
-		}
-	}
+	std::vector<GearEntry> results;
+	if (acquireSharedGearScan(path, results))
+		scannedMachines = std::move(results);
 }
 
 void BuzzController::startBackgroundScan(const std::string& dir)
@@ -364,27 +367,22 @@ void BuzzController::startBackgroundScan(const std::string& dir)
 	bgScanThread = std::thread([this, dir]() {
 		OutputDebugStringA("[BuzzBridge] Background gear scan starting...\n");
 
-		GearScanner scanner;
 		std::vector<GearEntry> results;
-		if (scanner.Scan(dir)) {
-			for (auto& e : scanner.GetEntries()) {
-				if (e.flags & (MIF_NO_OUTPUT | MIF_CONTROL_MACHINE)) continue;
-				results.push_back(e);
-			}
-		}
+		bool scanOk = acquireSharedGearScan(dir, results);
+		int numFound = (int)results.size();
 
 		{
 			std::lock_guard<std::mutex> lock(scanResultMutex);
 			pendingScanResults = std::move(results);
 			pendingScanDir = dir;
-			hasPendingScanResults = true;
+			hasPendingScanResults = scanOk;
 		}
 
 		bgScanRunning = false;
 
 		char dbgmsg[256];
 		snprintf(dbgmsg, sizeof(dbgmsg), "[BuzzBridge] Background scan done: %d machines found\n",
-			(int)pendingScanResults.size());
+			numFound);
 		OutputDebugStringA(dbgmsg);
 
 		// Notify the view on the UI thread

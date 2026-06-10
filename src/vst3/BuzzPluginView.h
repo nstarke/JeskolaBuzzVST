@@ -48,6 +48,11 @@ public:
 	std::function<void(Steinberg::Vst::ParamID id)> onParamBeginEdit;
 	std::function<void(Steinberg::Vst::ParamID id, double value)> onParamChanged;
 	std::function<void(Steinberg::Vst::ParamID id)> onParamEndEdit;
+	// Called from the destructor so the controller can drop its raw activeView
+	// pointer. Hosts create and destroy views at will (e.g. an editor probe
+	// during song load); without this the controller's later view updates
+	// (setComponentState -> pushParamInfoToView etc.) dereference a freed view.
+	std::function<void()> onViewDestroyed;
 	std::function<void(int presetIndex)> onPresetSelected;
 	std::function<void(const std::string& presetName)> onSavePreset;
 

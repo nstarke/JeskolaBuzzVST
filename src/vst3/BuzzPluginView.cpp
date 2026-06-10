@@ -36,6 +36,8 @@ BuzzPluginView::BuzzPluginView(const std::string& currentPath,
 
 BuzzPluginView::~BuzzPluginView()
 {
+	if (onViewDestroyed)
+		onViewDestroyed();
 	scanning = false;
 	if (scanThread.joinable())
 		scanThread.join();
