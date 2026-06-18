@@ -74,12 +74,91 @@ jobs:
           cp build64/VST3/Release/BuzzBridge.vst3/Contents/Resources/moduleinfo.json dist/BuzzBridge.vst3/Contents/Resources/
         shell: bash
 
+      # --- Windows code signing (Azure Trusted Signing) --------------------
+      # Signing is MANDATORY: refuse to publish an unsigned release. The inner
+      # binaries are signed BEFORE the installer wraps them, then the installer
+      # itself is signed after it is built. See docs/code-signing.md.
+      - name: Require Windows signing config
+        shell: bash
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$AZURE_CLIENT_SECRET" ]; then
+            echo "::error::Azure Trusted Signing secrets not set — refusing to publish an UNSIGNED Windows release. Configure the Windows signing secrets (see docs/code-signing.md)."
+            exit 1
+          fi
+
+      - name: Sign Windows binaries (Azure Trusted Signing)
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZ_TS_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZ_TS_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZ_TS_PROFILE }}
+          # dist currently holds only the assembled bundle (no installer yet):
+          # the two inner BuzzBridge.vst3 PEs plus BuzzBridgeHost32.exe.
+          files-folder: dist
+          files-folder-filter: vst3,exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows binary signatures
+        shell: pwsh
+        run: |
+          $files = @(
+            "dist/BuzzBridge.vst3/Contents/x86-win/BuzzBridge.vst3",
+            "dist/BuzzBridge.vst3/Contents/x86_64-win/BuzzBridge.vst3",
+            "dist/BuzzBridge.vst3/Contents/x86_64-win/BuzzBridgeHost32.exe"
+          )
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f
+            if ($sig.Status -ne 'Valid') {
+              Write-Error "Authenticode signature on $f is not Valid (status: $($sig.Status)) — refusing to publish."
+              exit 1
+            }
+            Write-Host "OK: $f signed by $($sig.SignerCertificate.Subject)"
+          }
+
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 
       - name: Build installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ github.ref_name }} installer\BuzzBridge.iss
+
+      - name: Sign Windows installer (Azure Trusted Signing)
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZ_TS_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZ_TS_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZ_TS_PROFILE }}
+          # Top-level dist only (recurse: false) so this matches just the
+          # installer exe, not the already-signed BuzzBridgeHost32.exe nested
+          # in the bundle.
+          files-folder: dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows installer signature
+        shell: pwsh
+        run: |
+          $exe = "dist/BuzzBridge-Setup-${{ github.ref_name }}.exe"
+          $sig = Get-AuthenticodeSignature $exe
+          if ($sig.Status -ne 'Valid') {
+            Write-Error "Authenticode signature on $exe is not Valid (status: $($sig.Status)) — refusing to publish."
+            exit 1
+          }
+          Write-Host "OK: $exe signed by $($sig.SignerCertificate.Subject)"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
