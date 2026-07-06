@@ -9,6 +9,7 @@
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivsthostapplication.h"
 #include "base/source/fstreamer.h"
 
 #include "SharedGearScan.h"
@@ -53,10 +54,13 @@ void BuzzController::initPreallocatedParams()
 		);
 	}
 
-	// Pre-allocate track parameter slots for all tracks.
-	// Track 0 params are always kCanAutomate (for MIDI CC mapping).
-	// Other tracks start hidden and are revealed when tracks are added.
-	for (int t = 0; t < kMaxTracks; t++) {
+	// Pre-allocate track parameter slots (all tracks by default; capped to
+	// maxParamTracks under hosts that choke on 1000+ params — see
+	// initialize). Track 0 params are always kCanAutomate (for MIDI CC
+	// mapping). Other tracks start hidden and are revealed when tracks are
+	// added. All consumers null-guard getParameter(), so unregistered
+	// slots are simply skipped.
+	for (int t = 0; t < maxParamTracks; t++) {
 		for (int i = 0; i < kMaxTrackParams; i++) {
 			Steinberg::Vst::String128 name16;
 			char slotName[32];
@@ -153,6 +157,38 @@ tresult PLUGIN_API BuzzController::initialize(FUnknown* context)
 	if (result != kResultOk)
 		return result;
 
+	// Renoise refuses to expose ANY parameters for a plugin whose parameter
+	// count exceeds its internal cap — with the full 16-track pre-allocation
+	// (1 + 64 + 16*64 = 1089 params) Renoise reports 0 parameters and the
+	// device can be neither automated nor MIDI-mapped. Since the bridge only
+	// routes notes to Buzz track 0 anyway, register just a couple of track
+	// slots when the host is Renoise (full pre-allocation elsewhere).
+	// BUZZVST_MAX_PARAM_TRACKS overrides the track-slot count in any host.
+	{
+		FUnknownPtr<Vst::IHostApplication> host(context);
+		Vst::String128 hostName = {0};
+		if (host && host->getName(hostName) == kResultOk) {
+			char ascii[128] = {0};
+			Steinberg::UString(hostName, 128).toAscii(ascii, sizeof(ascii) - 1);
+			for (char* p = ascii; *p; p++) *p = (char)tolower(*p);
+			if (strstr(ascii, "renoise")) {
+				maxParamTracks = 2;
+				// Renoise hides every parameter that IMidiMapping claims as
+				// a CC proxy; since this controller maps ALL slots to CCs,
+				// Renoise ends up exposing ZERO parameters (no automation,
+				// no MIDI mapping, none saved in the song). Renoise has its
+				// own CC->parameter mapping UI, so drop the VST3 mapping.
+				disableMidiCCMapping = true;
+			}
+		}
+		std::string envTracks = GetEnvStr("BUZZVST_MAX_PARAM_TRACKS");
+		if (!envTracks.empty()) {
+			int n = atoi(envTracks.c_str());
+			if (n >= 0 && n <= kMaxTracks)
+				maxParamTracks = n;
+		}
+	}
+
 	// Bypass parameter (always visible)
 	parameters.addParameter(
 		STR16("Bypass"), nullptr, 1, 0,
@@ -162,6 +198,25 @@ tresult PLUGIN_API BuzzController::initialize(FUnknown* context)
 
 	// Pre-allocate all parameter slots as hidden
 	initPreallocatedParams();
+
+	// Diagnostics (set BUZZVST_PARAM_DEBUG to a writable file path): record
+	// what host we detected and how many parameters were registered.
+	{
+		std::string dbgPath = GetEnvStr("BUZZVST_PARAM_DEBUG");
+		if (!dbgPath.empty()) {
+			FILE* f = fopen(dbgPath.c_str(), "a");
+			if (f) {
+				FUnknownPtr<Vst::IHostApplication> host(context);
+				Vst::String128 hostName = {0};
+				char ascii[128] = {0};
+				if (host && host->getName(hostName) == kResultOk)
+					Steinberg::UString(hostName, 128).toAscii(ascii, sizeof(ascii) - 1);
+				fprintf(f, "host='%s' maxParamTracks=%d paramCount=%d\n",
+					ascii, maxParamTracks, parameters.getParameterCount());
+				fclose(f);
+			}
+		}
+	}
 
 	// Auto-detect default gear directory if none is set.
 	// The installer places machines in %USERPROFILE%\Buzz\Gear.
@@ -1097,6 +1152,10 @@ tresult PLUGIN_API BuzzController::getMidiControllerAssignment(
 	CtrlNumber midiControllerNumber, ParamID& id)
 {
 	if (busIndex != 0)
+		return kResultFalse;
+
+	// Renoise treats CC-claimed params as hidden MIDI proxies (see initialize)
+	if (disableMidiCCMapping)
 		return kResultFalse;
 
 	// Map CCs 0-127 to pre-allocated parameter slots.

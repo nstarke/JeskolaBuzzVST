@@ -84,6 +84,13 @@ private:
 	void pushParamInfoToView();
 	void wireParamCallbacks(BuzzPluginView* view);
 
+	// Track slots to pre-register as VST3 parameters (capped under Renoise
+	// so its automation list stays usable; see initialize)
+	int maxParamTracks = kMaxTracks;
+	// Renoise hides every CC-claimed parameter, so IMidiMapping is disabled
+	// there (see initialize / getMidiControllerAssignment)
+	bool disableMidiCCMapping = false;
+
 	// Background gear scan
 	std::thread bgScanThread;
 	std::atomic<bool> bgScanRunning{false};

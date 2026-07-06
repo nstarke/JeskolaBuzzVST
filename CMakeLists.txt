@@ -258,4 +258,22 @@ if(NOT BUZZVST_64BIT)
         target_link_libraries(BuzzMachineTests PRIVATE kernel32 user32)
     endif()
     set_target_properties(BuzzMachineTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+    # Parameter metadata dumper: emits a JSON map of every machine's params
+    # (used by external tooling to author BuzzBridge state chunks)
+    add_executable(ParamDump
+        tests/tool_ParamDump.cpp
+        ${BUZZ_SOURCES}
+        src/vst3/GearScanner.cpp
+    )
+    target_include_directories(ParamDump PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_features(ParamDump PUBLIC cxx_std_17)
+    if(MSVC)
+        target_compile_options(ParamDump PRIVATE /EHa)
+        target_compile_definitions(ParamDump PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(SMTG_WIN)
+        target_link_libraries(ParamDump PRIVATE kernel32 user32)
+    endif()
+    set_target_properties(ParamDump PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
