@@ -189,10 +189,11 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	if (data.numSamples <= 0 || data.numSamples > 65536)
 		return kResultOk;
 
-	// Process MIDI events
-	if (data.inputEvents) {
-		processMidiEvents(data.inputEvents);
-	}
+	// Collect this block's MIDI events. They are applied at their sample
+	// offsets inside the chunk loop below; note events force an immediate
+	// tick there instead of waiting for the tempo-derived tick countdown
+	// (which caused tempo-dependent note latency of up to one tick).
+	collectMidiEvents(data.inputEvents);
 
 	// Update timing from transport
 	if (data.processContext) {
@@ -313,7 +314,25 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 	samplesPerTick = loader.GetMasterInfo()->SamplesPerTick;
 #endif
 
+	// Map host-rate event offsets into the (possibly machine-rate) chunk
+	// timeline used by the loop below.
+	double eventOffsetScale = 1.0;
+	if (shouldResample() && data.numSamples > 0)
+		eventOffsetScale = (double)processSamples / (double)data.numSamples;
+	size_t nextEventIdx = 0;
+
 	while (samplesRemaining > 0) {
+		// Apply MIDI events that fall at (or before) the current position.
+		// A note event zeroes the tick countdown so the tick fires right
+		// here, at the note's offset, instead of up to a full tick later.
+		while (nextEventIdx < blockEvents.size()) {
+			int32 evOffset = (int32)(blockEvents[nextEventIdx].sampleOffset * eventOffsetScale);
+			if (evOffset > offset) break;
+			if (applyMidiEvent(blockEvents[nextEventIdx]))
+				samplesUntilNextTick = 0;
+			nextEventIdx++;
+		}
+
 		// Fire a tick if needed
 		if (samplesUntilNextTick <= 0 || firstTick) {
 
@@ -406,6 +425,14 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 		int32 blockSize = std::min(samplesRemaining, samplesUntilNextTick);
 		blockSize = std::min(blockSize, (int32)MAX_BUFFER_LENGTH);
 
+		// Stop at the next event so it gets applied at its exact position
+		if (nextEventIdx < blockEvents.size()) {
+			int32 evOffset = (int32)(blockEvents[nextEventIdx].sampleOffset * eventOffsetScale);
+			int32 toEvent = evOffset - offset;
+			if (toEvent > 0 && toEvent < blockSize)
+				blockSize = toEvent;
+		}
+
 		// Set up offset pointers for this chunk
 		float* chunkInputs[2] = { nullptr, nullptr };
 		float* chunkOutputs[2] = { nullptr, nullptr };
@@ -429,6 +456,14 @@ tresult PLUGIN_API BuzzProcessor::process(ProcessData& data)
 #ifndef BUZZVST_64BIT
 		loader.GetMasterInfo()->PosInTick += blockSize;
 #endif
+	}
+
+	// Apply any events whose scaled offsets landed at/past the end of the
+	// block (offset rounding); a forced tick then fires first thing next block.
+	while (nextEventIdx < blockEvents.size()) {
+		if (applyMidiEvent(blockEvents[nextEventIdx]))
+			samplesUntilNextTick = 0;
+		nextEventIdx++;
 	}
 
 	// --- Resampling postamble: upsample machine-rate output to host rate ---
@@ -747,122 +782,133 @@ void BuzzProcessor::writeNoteToParams(int buzzNote, int velocity)
 #endif
 }
 
-void BuzzProcessor::processMidiEvents(IEventList* events)
+void BuzzProcessor::collectMidiEvents(IEventList* events)
 {
+	blockEvents.clear();
 	if (!machineReady || !events) return;
 
 	int32 numEvents = events->getEventCount();
 	for (int32 i = 0; i < numEvents; i++) {
 		Event event {};
 		if (events->getEvent(i, event) != kResultOk) continue;
+		blockEvents.push_back(event);
+	}
 
-		switch (event.type) {
-			case Event::kNoteOnEvent: {
-				int midiNote = event.noteOn.pitch;
-				int velocity = (int)(event.noteOn.velocity * 127.0f + 0.5f);
-				if (velocity < 0) velocity = 0;
-				if (velocity > 127) velocity = 127;
+	// The chunk loop consumes these in offset order; hosts usually deliver
+	// them sorted, but the spec doesn't guarantee it.
+	std::stable_sort(blockEvents.begin(), blockEvents.end(),
+		[](const Event& a, const Event& b) { return a.sampleOffset < b.sampleOffset; });
+}
 
-				pendingNoteOff = false; // cancel any deferred note-off
-				writeNoteToParams(MidiNoteToBuzz(midiNote), velocity);
+bool BuzzProcessor::applyMidiEvent(const Event& event)
+{
+	switch (event.type) {
+		case Event::kNoteOnEvent: {
+			int midiNote = event.noteOn.pitch;
+			int velocity = (int)(event.noteOn.velocity * 127.0f + 0.5f);
+			if (velocity < 0) velocity = 0;
+			if (velocity > 127) velocity = 127;
+
+			pendingNoteOff = false; // cancel any deferred note-off
+			writeNoteToParams(MidiNoteToBuzz(midiNote), velocity);
 
 #ifdef BUZZVST_64BIT
-				bridge.SendMidiNote(event.noteOn.channel, midiNote, velocity);
+			bridge.SendMidiNote(event.noteOn.channel, midiNote, velocity);
 #else
-				if (auto* machine = loader.GetMachine()) {
-					SEH_Call([&]() { machine->MidiNote(event.noteOn.channel, midiNote, velocity); });
-				}
-#endif
-				break;
+			if (auto* machine = loader.GetMachine()) {
+				SEH_Call([&]() { machine->MidiNote(event.noteOn.channel, midiNote, velocity); });
 			}
-
-			case Event::kNoteOffEvent: {
-				// If there's a pending note-on that hasn't been ticked yet, defer the
-				// note-off so the machine sees the note-on first on the next tick.
-				bool noteStillPending = false;
-#ifdef BUZZVST_64BIT
-				if (bridgeTrackNoteSlot >= 0 && !currentTrackValues.empty()) {
-					auto& tp = trackParamChanged[0];
-					if (bridgeTrackNoteSlot < (int)tp.size() && tp[bridgeTrackNoteSlot]) {
-						int val = currentTrackValues[0][bridgeTrackNoteSlot];
-						if (val != NOTE_OFF && val != NOTE_NO)
-							noteStillPending = true;
-					}
-				}
-				else if (bridgeTrackTrigSlot >= 0 && !currentTrackValues.empty()) {
-					auto& tp = trackParamChanged[0];
-					if (bridgeTrackTrigSlot < (int)tp.size() && tp[bridgeTrackTrigSlot]) {
-						if (currentTrackValues[0][bridgeTrackTrigSlot] == 1)
-							noteStillPending = true;
-					}
-				}
-#else
-				{
-					auto* layout = loader.GetParamLayout();
-					auto& tSlots = layout->GetTrackSlots();
-					for (int j = 0; j < (int)tSlots.size(); j++) {
-						if (tSlots[j].param->Type == pt_note && !currentTrackValues.empty()) {
-							auto& tp = trackParamChanged[0];
-							if (j < (int)tp.size() && tp[j]) {
-								int val = currentTrackValues[0][j];
-								if (val != NOTE_OFF && val != NOTE_NO)
-									noteStillPending = true;
-							}
-							break;
-						}
-					}
-				}
 #endif
-				if (noteStillPending) {
-					pendingNoteOff = true;
-				} else {
-					writeNoteToParams(NOTE_OFF);
-#ifdef BUZZVST_64BIT
-					bridge.SendMidiNote(event.noteOff.channel, event.noteOff.pitch, 0);
-#else
-					if (auto* machine = loader.GetMachine()) {
-						SEH_Call([&]() { machine->MidiNote(event.noteOff.channel, event.noteOff.pitch, 0); });
-					}
-#endif
-				}
-				break;
-			}
-
-			case Event::kPolyPressureEvent: {
-				int pressure = (int)(event.polyPressure.pressure * 127.0f + 0.5f);
-				if (pressure < 0) pressure = 0;
-				if (pressure > 127) pressure = 127;
-#ifdef BUZZVST_64BIT
-				bridge.SendMidiCC(kAfterTouch, event.polyPressure.channel, pressure);
-#else
-				if (auto* machineEx = loader.GetMachineEx()) {
-					SEH_Call([&]() {
-						machineEx->MidiControlChange(kAfterTouch, event.polyPressure.channel, pressure);
-					});
-				}
-#endif
-				break;
-			}
-
-			case Event::kLegacyMIDICCOutEvent: {
-				int ctrl = event.midiCCOut.controlNumber;
-				int channel = event.midiCCOut.channel;
-				int value = event.midiCCOut.value;
-#ifdef BUZZVST_64BIT
-				bridge.SendMidiCC(ctrl, channel, value);
-#else
-				if (auto* machineEx = loader.GetMachineEx()) {
-					if (ctrl < 128 || ctrl == kPitchBend || ctrl == kAfterTouch) {
-						SEH_Call([&]() { machineEx->MidiControlChange(ctrl, channel, value); });
-					}
-				}
-#endif
-				break;
-			}
-
-			default:
-				break;
+			return true;
 		}
+
+		case Event::kNoteOffEvent: {
+			// If there's a pending note-on that hasn't been ticked yet, defer the
+			// note-off so the machine sees the note-on first on the next tick.
+			bool noteStillPending = false;
+#ifdef BUZZVST_64BIT
+			if (bridgeTrackNoteSlot >= 0 && !currentTrackValues.empty()) {
+				auto& tp = trackParamChanged[0];
+				if (bridgeTrackNoteSlot < (int)tp.size() && tp[bridgeTrackNoteSlot]) {
+					int val = currentTrackValues[0][bridgeTrackNoteSlot];
+					if (val != NOTE_OFF && val != NOTE_NO)
+						noteStillPending = true;
+				}
+			}
+			else if (bridgeTrackTrigSlot >= 0 && !currentTrackValues.empty()) {
+				auto& tp = trackParamChanged[0];
+				if (bridgeTrackTrigSlot < (int)tp.size() && tp[bridgeTrackTrigSlot]) {
+					if (currentTrackValues[0][bridgeTrackTrigSlot] == 1)
+						noteStillPending = true;
+				}
+			}
+#else
+			{
+				auto* layout = loader.GetParamLayout();
+				auto& tSlots = layout->GetTrackSlots();
+				for (int j = 0; j < (int)tSlots.size(); j++) {
+					if (tSlots[j].param->Type == pt_note && !currentTrackValues.empty()) {
+						auto& tp = trackParamChanged[0];
+						if (j < (int)tp.size() && tp[j]) {
+							int val = currentTrackValues[0][j];
+							if (val != NOTE_OFF && val != NOTE_NO)
+								noteStillPending = true;
+						}
+						break;
+					}
+				}
+			}
+#endif
+			if (noteStillPending) {
+				// Deferred; applied right after the pending note-on's tick.
+				pendingNoteOff = true;
+				return false;
+			}
+			writeNoteToParams(NOTE_OFF);
+#ifdef BUZZVST_64BIT
+			bridge.SendMidiNote(event.noteOff.channel, event.noteOff.pitch, 0);
+#else
+			if (auto* machine = loader.GetMachine()) {
+				SEH_Call([&]() { machine->MidiNote(event.noteOff.channel, event.noteOff.pitch, 0); });
+			}
+#endif
+			return true;
+		}
+
+		case Event::kPolyPressureEvent: {
+			int pressure = (int)(event.polyPressure.pressure * 127.0f + 0.5f);
+			if (pressure < 0) pressure = 0;
+			if (pressure > 127) pressure = 127;
+#ifdef BUZZVST_64BIT
+			bridge.SendMidiCC(kAfterTouch, event.polyPressure.channel, pressure);
+#else
+			if (auto* machineEx = loader.GetMachineEx()) {
+				SEH_Call([&]() {
+					machineEx->MidiControlChange(kAfterTouch, event.polyPressure.channel, pressure);
+				});
+			}
+#endif
+			return false;
+		}
+
+		case Event::kLegacyMIDICCOutEvent: {
+			int ctrl = event.midiCCOut.controlNumber;
+			int channel = event.midiCCOut.channel;
+			int value = event.midiCCOut.value;
+#ifdef BUZZVST_64BIT
+			bridge.SendMidiCC(ctrl, channel, value);
+#else
+			if (auto* machineEx = loader.GetMachineEx()) {
+				if (ctrl < 128 || ctrl == kPitchBend || ctrl == kAfterTouch) {
+					SEH_Call([&]() { machineEx->MidiControlChange(ctrl, channel, value); });
+				}
+			}
+#endif
+			return false;
+		}
+
+		default:
+			return false;
 	}
 }
 

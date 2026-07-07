@@ -1,6 +1,7 @@
 #pragma once
 
 #include "public.sdk/source/vst/vstaudioeffect.h"
+#include "pluginterfaces/vst/ivstevents.h"
 #include "../buzz/BuzzMachineLoader.h"
 #include "../buzz/BuzzParamLayout.h"
 #include "../common/SEHGuard.h"
@@ -55,8 +56,14 @@ protected:
 	// Process parameter changes from the host
 	void processParameterChanges(IParameterChanges* changes);
 
-	// Process MIDI events (notes, CC, pressure)
-	void processMidiEvents(IEventList* events);
+	// Collect this block's MIDI events into blockEvents, sorted by sample
+	// offset. They are applied inside the chunk loop at their offsets.
+	void collectMidiEvents(IEventList* events);
+
+	// Apply one MIDI event (note, CC, pressure) to the machine/param buffers.
+	// Returns true if a tick should fire immediately at the event's position
+	// (note events — so they don't wait out the tempo-derived tick countdown).
+	bool applyMidiEvent(const Event& event);
 
 	// Write a Buzz note value into the first pt_note parameter found.
 	// If velocity >= 0, also write it to the volume/velocity param following the note.
@@ -148,6 +155,10 @@ protected:
 	// Deferred note-off: if a note-off arrives before a pending note-on is ticked,
 	// defer it so the machine sees the note-on first.
 	bool pendingNoteOff = false;
+
+	// Events for the current block, sorted by sample offset (member to avoid
+	// reallocating on the audio thread every block)
+	std::vector<Event> blockEvents;
 
 	// Cached master info to avoid sending SetMasterInfo on every process() call
 	int lastSentBpm = 0;
